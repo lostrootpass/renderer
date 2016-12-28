@@ -1,0 +1,11 @@
+*.obj
+x64/
+Debug/
+Makefile*
+*.user
+*.pdb
+*.db
+.vs/
+moc_*
+gen/
+*.opendb
