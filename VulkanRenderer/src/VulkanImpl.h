@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.h>
 
 #include <vector>
+#include <unordered_map>
 
 #include "Window.h"
 #include "Model.h"
@@ -28,6 +29,8 @@ public:
 	void createAndBindBuffer(const VkBufferCreateInfo& info, VkBuffer* buffer, VkDeviceMemory* memory, VkMemoryPropertyFlags flags) const;
 
 	uint32_t getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const;
+
+	const VkPipeline getPipelineForShader(const std::string& shaderName);
 
 	void init(const Window& window);
 
@@ -85,6 +88,7 @@ private:
 
 	std::vector<VkCommandBuffer> _commandBuffers;
 	std::vector<Model*> _models;
+	std::unordered_map<std::string, VkPipeline> _pipelines;
 
 	static VkDevice _device;
 	static VkPhysicalDevice _physicalDevice;
@@ -93,7 +97,6 @@ private:
 	VkSurfaceKHR _surface;
 	VkRenderPass _renderPass;
 	VkPipelineLayout _pipelineLayout;
-	VkPipeline _pipeline;
 	VkDescriptorSetLayout _descriptorLayout;
 	VkDescriptorSet _descriptor;
 	VkSampler _sampler;
@@ -109,7 +112,6 @@ private:
 	void _createCommandPool();
 	void _createInstance();
 	void _createLayouts();
-	void _createPipeline();
 	void _createRenderPass();
 	void _createSampler();
 	void _createSwapChain();

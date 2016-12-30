@@ -88,6 +88,111 @@ uint32_t VulkanImpl::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags fla
 	return -1;
 }
 
+const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
+{
+	if (_pipelines.find(shaderName) != _pipelines.end())
+		return _pipelines[shaderName];
+
+	VkPipeline pipeline;
+
+	VkPipelineShaderStageCreateInfo stages[2] = {};
+	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	stages[0].pName = "main";
+	stages[0].module = ShaderCache::getModule(shaderName + ".vert");
+
+	stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	stages[1].pName = "main";
+	stages[1].module = ShaderCache::getModule(shaderName + ".frag");
+
+	VkPipelineColorBlendAttachmentState cba = {};
+	cba.blendEnable = VK_FALSE;
+	cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+	VkPipelineColorBlendStateCreateInfo cbs = {};
+	cbs.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	cbs.attachmentCount = 1;
+	cbs.pAttachments = &cba;
+	cbs.logicOp = VK_LOGIC_OP_COPY;
+
+	VkPipelineInputAssemblyStateCreateInfo ias = {};
+	ias.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	ias.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	ias.primitiveRestartEnable = VK_FALSE;
+
+	VkPipelineMultisampleStateCreateInfo mss = {};
+	mss.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	mss.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+	VkPipelineRasterizationStateCreateInfo rs = {};
+	rs.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rs.cullMode = VK_CULL_MODE_BACK_BIT;
+	rs.polygonMode = VK_POLYGON_MODE_FILL;
+	rs.lineWidth = 1.0f;
+	rs.frontFace = VK_FRONT_FACE_CLOCKWISE;
+
+	VkVertexInputBindingDescription vbs = {};
+	vbs.binding = 0;
+	vbs.stride = sizeof(Vertex);
+	vbs.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+	VkVertexInputAttributeDescription vtxAttrs[2] = {};
+	vtxAttrs[0].binding = 0;
+	vtxAttrs[0].location = 0;
+	vtxAttrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+	vtxAttrs[0].offset = offsetof(Vertex, position);
+
+	vtxAttrs[1].binding = 0;
+	vtxAttrs[1].location = 1;
+	vtxAttrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	vtxAttrs[1].offset = offsetof(Vertex, color);
+
+	VkPipelineVertexInputStateCreateInfo vis = {};
+	vis.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vis.vertexBindingDescriptionCount = 1;
+	vis.pVertexBindingDescriptions = &vbs;
+	vis.vertexAttributeDescriptionCount = 2;
+	vis.pVertexAttributeDescriptions = vtxAttrs;
+
+	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
+	VkRect2D sc = { 0, 0, extent.width, extent.height };
+
+	VkViewport vp = {};
+	vp.width = (float)extent.width;
+	vp.height = (float)extent.height;
+	vp.minDepth = 0.0f;
+	vp.maxDepth = 1.0f;
+
+	VkPipelineViewportStateCreateInfo vps = {};
+	vps.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	vps.viewportCount = 1;
+	vps.scissorCount = 1;
+	vps.pViewports = &vp;
+	vps.pScissors = &sc;
+
+	VkGraphicsPipelineCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	info.layout = _pipelineLayout;
+	info.renderPass = _renderPass;
+	info.stageCount = 2;
+	info.pStages = stages;
+	info.pColorBlendState = &cbs;
+	info.pInputAssemblyState = &ias;
+	info.pMultisampleState = &mss;
+	info.pRasterizationState = &rs;
+	info.pVertexInputState = &vis;
+	info.pViewportState = &vps;
+
+	if (vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS)
+	{
+		//
+	}
+
+	_pipelines[shaderName] = pipeline;
+	return _pipelines[shaderName];
+}
+
 void VulkanImpl::init(const Window& window)
 {
 	_createInstance();
@@ -100,12 +205,12 @@ void VulkanImpl::init(const Window& window)
 	_initDevice();
 	_createCommandPool();
 	ShaderCache::init();
-	_loadTestModel();
-
 	_createRenderPass();
 	_createSwapChain();
 	_createLayouts();
-	_createPipeline();
+
+	_loadTestModel();
+
 	_allocateCommandBuffers();
 	_createSampler();
 }
@@ -154,8 +259,6 @@ void VulkanImpl::_allocateCommandBuffers()
 
 		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 		
-		vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
-		
 		for (Model* model : _models)
 		{
 			model->draw(buffer);
@@ -180,7 +283,14 @@ void VulkanImpl::_cleanup()
 
 	vkDestroySampler(_device, _sampler, nullptr);
 	ShaderCache::shutdown();
-	vkDestroyPipeline(_device, _pipeline, nullptr);
+
+	for (auto pair : _pipelines)
+	{
+		vkDestroyPipeline(_device, pair.second, nullptr);
+	}
+
+	_pipelines.clear();
+
 	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
 	vkDestroyDescriptorSetLayout(_device, _descriptorLayout, nullptr);
 
@@ -273,106 +383,6 @@ void VulkanImpl::_createInstance()
 	}
 	
 	if (vkCreateInstance(&createInfo, nullptr, &_instance) != VK_SUCCESS)
-	{
-		//
-	}
-}
-
-void VulkanImpl::_createPipeline()
-{
-	VkPipelineShaderStageCreateInfo stages[2] = {};
-	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-	stages[0].pName = "main";
-	stages[0].module = ShaderCache::getModule("shaders/triangle/triangle.vert");
-
-	stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	stages[1].pName = "main";
-	stages[1].module = ShaderCache::getModule("shaders/triangle/triangle.frag");
-
-	VkPipelineColorBlendAttachmentState cba = {};
-	cba.blendEnable = VK_FALSE;
-	cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-	VkPipelineColorBlendStateCreateInfo cbs = {};
-	cbs.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	cbs.attachmentCount = 1;
-	cbs.pAttachments = &cba;
-	cbs.logicOp = VK_LOGIC_OP_COPY;
-
-	VkPipelineInputAssemblyStateCreateInfo ias = {};
-	ias.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	ias.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-	ias.primitiveRestartEnable = VK_FALSE;
-
-	VkPipelineMultisampleStateCreateInfo mss = {};
-	mss.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	mss.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-	VkPipelineRasterizationStateCreateInfo rs = {};
-	rs.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rs.cullMode = VK_CULL_MODE_BACK_BIT;
-	rs.polygonMode = VK_POLYGON_MODE_FILL;
-	rs.lineWidth = 1.0f;
-	rs.frontFace = VK_FRONT_FACE_CLOCKWISE;
-
-	VkVertexInputBindingDescription vbs = {};
-	vbs.binding = 0;
-	vbs.stride = sizeof(Vertex);
-	vbs.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-	VkVertexInputAttributeDescription vtxAttrs[2] = {};
-	vtxAttrs[0].binding = 0;
-	vtxAttrs[0].location = 0;
-	vtxAttrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-	vtxAttrs[0].offset = offsetof(Vertex, position);
-
-	vtxAttrs[1].binding = 0;
-	vtxAttrs[1].location = 1;
-	vtxAttrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	vtxAttrs[1].offset = offsetof(Vertex, color);
-
-	VkPipelineVertexInputStateCreateInfo vis = {};
-	vis.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vis.vertexBindingDescriptionCount = 1;
-	vis.pVertexBindingDescriptions = &vbs;
-	vis.vertexAttributeDescriptionCount = 2;
-	vis.pVertexAttributeDescriptions = vtxAttrs;
-
-	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
-	VkRect2D sc = {
-		0, 0,
-		(int32_t)extent.width, (int32_t)extent.height
-	};
-
-	VkViewport vp = {};
-	vp.width = (float)extent.width;
-	vp.height = (float)extent.height;
-	vp.minDepth = 0.0f;
-	vp.maxDepth = 1.0f;
-
-	VkPipelineViewportStateCreateInfo vps = {};
-	vps.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	vps.viewportCount = 1;
-	vps.scissorCount = 1;
-	vps.pViewports = &vp;
-	vps.pScissors = &sc;
-
-	VkGraphicsPipelineCreateInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	info.layout = _pipelineLayout;
-	info.renderPass = _renderPass;
-	info.stageCount = 2;
-	info.pStages = stages;
-	info.pColorBlendState = &cbs;
-	info.pInputAssemblyState = &ias;
-	info.pMultisampleState = &mss;
-	info.pRasterizationState = &rs;
-	info.pVertexInputState = &vis;
-	info.pViewportState = &vps;
-
-	if (vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &info, nullptr, &_pipeline) != VK_SUCCESS)
 	{
 		//
 	}

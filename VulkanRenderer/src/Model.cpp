@@ -16,12 +16,12 @@ Model::~Model()
 
 void Model::draw(VkCommandBuffer cmd)
 {
-	//vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(cmd, 0, 1, &_vertexBuffer, offsets);
 	vkCmdBindIndexBuffer(cmd, _indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdDrawIndexed(cmd, _indices.size(), 1, 0, 0, 0);
+	vkCmdDrawIndexed(cmd, (uint32_t)_indices.size(), 1, 0, 0, 0);
 }
 
 void Model::_load(VulkanImpl* renderer)
@@ -44,6 +44,9 @@ void Model::_load(VulkanImpl* renderer)
 	_indices.push_back(2);
 	//Test data end
 
+	char shaderName[128] = {'\0'};
+	sprintf_s(shaderName, "models/%s/%s", _name.c_str(), _name.c_str());
+	_pipeline = renderer->getPipelineForShader(shaderName);
 
 	//Vertex buffer
 	{

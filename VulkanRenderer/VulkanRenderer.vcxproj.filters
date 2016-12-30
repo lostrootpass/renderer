@@ -56,9 +56,6 @@
     <ClInclude Include="src\Model.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\PipelineCache.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\ShaderCache.h">
       <Filter>Header Files</Filter>
     </ClInclude>
