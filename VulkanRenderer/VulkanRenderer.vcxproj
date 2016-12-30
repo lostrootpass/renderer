@@ -127,12 +127,17 @@
   <ItemGroup>
     <ClCompile Include="src\Core.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Model.cpp" />
+    <ClCompile Include="src\ShaderCache.cpp" />
     <ClCompile Include="src\SwapChain.cpp" />
     <ClCompile Include="src\VulkanImpl.cpp" />
     <ClCompile Include="src\Window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Core.h" />
+    <ClInclude Include="src\Model.h" />
+    <ClInclude Include="src\PipelineCache.h" />
+    <ClInclude Include="src\ShaderCache.h" />
     <ClInclude Include="src\SwapChain.h" />
     <ClInclude Include="src\VulkanImpl.h" />
     <ClInclude Include="src\VulkanImplUtil.h" />

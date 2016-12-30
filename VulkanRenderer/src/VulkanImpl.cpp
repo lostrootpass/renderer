@@ -1,8 +1,13 @@
 #include "VulkanImpl.h"
 #include "VulkanImplUtil.h"
 #include "SwapChain.h"
+#include "ShaderCache.h"
+#include "Model.h"
 
 #include <set>
+
+VkDevice VulkanImpl::_device = VK_NULL_HANDLE;
+VkPhysicalDevice VulkanImpl::_physicalDevice = VK_NULL_HANDLE;
 
 VulkanImpl::VulkanImpl() : _swapChain(nullptr)
 {
@@ -12,6 +17,75 @@ VulkanImpl::VulkanImpl() : _swapChain(nullptr)
 VulkanImpl::~VulkanImpl()
 {
 	_cleanup();
+}
+
+void VulkanImpl::copyBuffer(VkBuffer* dst, VkBuffer* src, VkDeviceSize size) const
+{
+	VkCommandBufferAllocateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	info.commandPool = _commandPool;
+	info.commandBufferCount = 1;
+	info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+	VkCommandBuffer buffer;
+	vkAllocateCommandBuffers(_device, &info, &buffer);
+
+	VkCommandBufferBeginInfo begin = {};
+	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	VkBufferCopy copy = {};
+	copy.size = size;
+
+	VkSubmitInfo submit = {};
+	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit.commandBufferCount = 1;
+	submit.pCommandBuffers = &buffer;
+
+	vkBeginCommandBuffer(buffer, &begin);
+	vkCmdCopyBuffer(buffer, *src, *dst, 1, &copy);
+	vkEndCommandBuffer(buffer);
+
+	vkQueueSubmit(_graphicsQueue.vkQueue, 1, &submit, VK_NULL_HANDLE);
+	vkQueueWaitIdle(_graphicsQueue.vkQueue);
+
+	vkFreeCommandBuffers(_device, _commandPool, 1, &buffer);
+}
+
+void VulkanImpl::createAndBindBuffer(const VkBufferCreateInfo& info, VkBuffer* buffer, VkDeviceMemory* memory, VkMemoryPropertyFlags flags) const
+{
+	if (!buffer || !memory)
+		return;
+
+	VkMemoryRequirements memReq;
+
+	vkCreateBuffer(_device, &info, nullptr, buffer);
+	vkGetBufferMemoryRequirements(VulkanImpl::device(), *buffer, &memReq);
+
+	VkMemoryAllocateInfo alloc = {};
+	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc.allocationSize = memReq.size;
+	alloc.memoryTypeIndex = getMemoryTypeIndex(memReq.memoryTypeBits, flags);
+
+	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, memory);
+
+	vkBindBufferMemory(VulkanImpl::device(), *buffer, *memory, 0);
+}
+
+uint32_t VulkanImpl::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const
+{
+	VkPhysicalDeviceMemoryProperties props;
+	vkGetPhysicalDeviceMemoryProperties(_physicalDevice, &props);
+
+	for (uint32_t i = 0; i < props.memoryTypeCount; i++)
+	{
+		if (((props.memoryTypes[i].propertyFlags & flags) == flags) && (bits & (1 << i)))
+		{
+			return i;
+		}
+	}
+
+	return -1;
 }
 
 void VulkanImpl::init(const Window& window)
@@ -24,11 +98,15 @@ void VulkanImpl::init(const Window& window)
 
 	window.createSurface(_instance, &_surface);
 	_initDevice();
+	_createCommandPool();
+	ShaderCache::init();
+	_loadTestModel();
+
 	_createRenderPass();
 	_createSwapChain();
-	_createCommandPool();
-	_allocateCommandBuffers();
+	_createLayouts();
 	_createPipeline();
+	_allocateCommandBuffers();
 	_createSampler();
 }
 
@@ -53,7 +131,7 @@ void VulkanImpl::_allocateCommandBuffers()
 		//
 	}
 
-	VkClearValue clearColour = { 1.0f, 0.0f, 0.0f, 1.0f };
+	VkClearValue clearColour = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 	for (size_t i = 0; i < _commandBuffers.size(); i++)
 	{
@@ -75,7 +153,14 @@ void VulkanImpl::_allocateCommandBuffers()
 		vkBeginCommandBuffer(buffer, &beginInfo);
 
 		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
-		//vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+		
+		vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+		
+		for (Model* model : _models)
+		{
+			model->draw(buffer);
+		}
+
 		vkCmdEndRenderPass(buffer);
 
 		vkEndCommandBuffer(buffer);
@@ -86,16 +171,26 @@ void VulkanImpl::_cleanup()
 {
 	vkDeviceWaitIdle(_device);
 
-	vkDestroySampler(_device, _sampler, nullptr);
+	for (Model* model : _models)
+	{
+		delete model;
+	}
 
-	//vkDestroyPipeline(_device, _pipeline, nullptr);
+	_models.clear();
+
+	vkDestroySampler(_device, _sampler, nullptr);
+	ShaderCache::shutdown();
+	vkDestroyPipeline(_device, _pipeline, nullptr);
+	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+	vkDestroyDescriptorSetLayout(_device, _descriptorLayout, nullptr);
 
 	delete _swapChain;
 	_swapChain = nullptr;
-	
+
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
 	vkDestroyCommandPool(_device, _commandPool, nullptr);
 	vkDestroyDevice(_device, nullptr);
+	_device = VK_NULL_HANDLE;
 	vkDestroySurfaceKHR(_instance, _surface, nullptr);
 
 	if (DEBUGENABLE)
@@ -116,6 +211,28 @@ void VulkanImpl::_createCommandPool()
 	info.queueFamilyIndex = _graphicsQueue.index;
 
 	if (vkCreateCommandPool(_device, &info, nullptr, &_commandPool) != VK_SUCCESS)
+	{
+		//
+	}
+}
+
+void VulkanImpl::_createLayouts()
+{
+	VkDescriptorSetLayoutCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	info.bindingCount = 0;
+
+	if(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayout) != VK_SUCCESS)
+	{
+		//
+	}
+
+	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
+	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutCreateInfo.setLayoutCount = 1;
+	layoutCreateInfo.pSetLayouts = &_descriptorLayout;
+
+	if (vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout) != VK_SUCCESS)
 	{
 		//
 	}
@@ -163,7 +280,102 @@ void VulkanImpl::_createInstance()
 
 void VulkanImpl::_createPipeline()
 {
+	VkPipelineShaderStageCreateInfo stages[2] = {};
+	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	stages[0].pName = "main";
+	stages[0].module = ShaderCache::getModule("shaders/triangle/triangle.vert");
 
+	stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	stages[1].pName = "main";
+	stages[1].module = ShaderCache::getModule("shaders/triangle/triangle.frag");
+
+	VkPipelineColorBlendAttachmentState cba = {};
+	cba.blendEnable = VK_FALSE;
+	cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+	VkPipelineColorBlendStateCreateInfo cbs = {};
+	cbs.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	cbs.attachmentCount = 1;
+	cbs.pAttachments = &cba;
+	cbs.logicOp = VK_LOGIC_OP_COPY;
+
+	VkPipelineInputAssemblyStateCreateInfo ias = {};
+	ias.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	ias.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	ias.primitiveRestartEnable = VK_FALSE;
+
+	VkPipelineMultisampleStateCreateInfo mss = {};
+	mss.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	mss.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+	VkPipelineRasterizationStateCreateInfo rs = {};
+	rs.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rs.cullMode = VK_CULL_MODE_BACK_BIT;
+	rs.polygonMode = VK_POLYGON_MODE_FILL;
+	rs.lineWidth = 1.0f;
+	rs.frontFace = VK_FRONT_FACE_CLOCKWISE;
+
+	VkVertexInputBindingDescription vbs = {};
+	vbs.binding = 0;
+	vbs.stride = sizeof(Vertex);
+	vbs.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+	VkVertexInputAttributeDescription vtxAttrs[2] = {};
+	vtxAttrs[0].binding = 0;
+	vtxAttrs[0].location = 0;
+	vtxAttrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+	vtxAttrs[0].offset = offsetof(Vertex, position);
+
+	vtxAttrs[1].binding = 0;
+	vtxAttrs[1].location = 1;
+	vtxAttrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	vtxAttrs[1].offset = offsetof(Vertex, color);
+
+	VkPipelineVertexInputStateCreateInfo vis = {};
+	vis.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vis.vertexBindingDescriptionCount = 1;
+	vis.pVertexBindingDescriptions = &vbs;
+	vis.vertexAttributeDescriptionCount = 2;
+	vis.pVertexAttributeDescriptions = vtxAttrs;
+
+	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
+	VkRect2D sc = {
+		0, 0,
+		(int32_t)extent.width, (int32_t)extent.height
+	};
+
+	VkViewport vp = {};
+	vp.width = (float)extent.width;
+	vp.height = (float)extent.height;
+	vp.minDepth = 0.0f;
+	vp.maxDepth = 1.0f;
+
+	VkPipelineViewportStateCreateInfo vps = {};
+	vps.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	vps.viewportCount = 1;
+	vps.scissorCount = 1;
+	vps.pViewports = &vp;
+	vps.pScissors = &sc;
+
+	VkGraphicsPipelineCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	info.layout = _pipelineLayout;
+	info.renderPass = _renderPass;
+	info.stageCount = 2;
+	info.pStages = stages;
+	info.pColorBlendState = &cbs;
+	info.pInputAssemblyState = &ias;
+	info.pMultisampleState = &mss;
+	info.pRasterizationState = &rs;
+	info.pVertexInputState = &vis;
+	info.pViewportState = &vps;
+
+	if (vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &info, nullptr, &_pipeline) != VK_SUCCESS)
+	{
+		//
+	}
 }
 
 void VulkanImpl::_createRenderPass()
@@ -330,6 +542,12 @@ void VulkanImpl::_initDevice()
 
 	vkGetDeviceQueue(_device, _graphicsQueue.index, 0, &_graphicsQueue.vkQueue);
 	vkGetDeviceQueue(_device, _presentQueue.index, 0, &_presentQueue.vkQueue);
+}
+
+void VulkanImpl::_loadTestModel()
+{
+	Model* model = new Model("triangle", this);
+	_models.push_back(model);
 }
 
 VkPhysicalDevice VulkanImpl::_pickPhysicalDevice()

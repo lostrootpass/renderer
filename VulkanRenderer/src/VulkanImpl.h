@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "Window.h"
+#include "Model.h"
 
 typedef class VulkanImpl
 {
@@ -22,6 +23,12 @@ public:
 	VulkanImpl();
 	~VulkanImpl();
 
+	void copyBuffer(VkBuffer* dst, VkBuffer* src, VkDeviceSize size) const;
+
+	void createAndBindBuffer(const VkBufferCreateInfo& info, VkBuffer* buffer, VkDeviceMemory* memory, VkMemoryPropertyFlags flags) const;
+
+	uint32_t getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const;
+
 	void init(const Window& window);
 
 	void render();
@@ -34,7 +41,7 @@ public:
 		return _commandBuffers[idx];
 	}
 
-	inline const VkDevice device() const
+	inline static const VkDevice device()
 	{
 		return _device;
 	}
@@ -49,7 +56,7 @@ public:
 		return _instance;
 	}
 
-	inline const VkPhysicalDevice physicalDevice() const
+	inline static const VkPhysicalDevice physicalDevice()
 	{
 		return _physicalDevice;
 	}
@@ -77,14 +84,18 @@ private:
 	};
 
 	std::vector<VkCommandBuffer> _commandBuffers;
+	std::vector<Model*> _models;
 
+	static VkDevice _device;
+	static VkPhysicalDevice _physicalDevice;
 	VkDebugReportCallbackEXT _debugCallback;
 	VkInstance _instance;
 	VkSurfaceKHR _surface;
-	VkPhysicalDevice _physicalDevice;
-	VkDevice _device;
 	VkRenderPass _renderPass;
+	VkPipelineLayout _pipelineLayout;
 	VkPipeline _pipeline;
+	VkDescriptorSetLayout _descriptorLayout;
+	VkDescriptorSet _descriptor;
 	VkSampler _sampler;
 	VkCommandPool _commandPool;
 
@@ -97,11 +108,13 @@ private:
 	void _cleanup();
 	void _createCommandPool();
 	void _createInstance();
+	void _createLayouts();
 	void _createPipeline();
 	void _createRenderPass();
 	void _createSampler();
 	void _createSwapChain();
 	void _initDevice();
+	void _loadTestModel();
 	VkPhysicalDevice _pickPhysicalDevice();
 	void _queryDeviceQueueFamilies(VkPhysicalDevice device);
 	void _registerDebugger();
