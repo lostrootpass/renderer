@@ -14,6 +14,10 @@ SwapChain::~SwapChain()
 	vkDestroySemaphore(_device, _imageAvailableSemaphore, nullptr);
 	vkDestroySemaphore(_device, _renderingFinishedSemaphore, nullptr);
 
+	vkDestroyImageView(VulkanImpl::device(), _depthView, nullptr);
+	vkDestroyImage(VulkanImpl::device(), _depthImage, nullptr);
+	vkFreeMemory(VulkanImpl::device(), _depthMemory, nullptr);
+
 	for (VkFramebuffer fb : _framebuffers)
 	{
 		vkDestroyFramebuffer(_device, fb, nullptr);
@@ -47,6 +51,7 @@ void SwapChain::init(VkSwapchainCreateInfoKHR& info)
 	_vkSwapchain = newSwapchain;
 
 	_createImageViews();
+	_createDepthBuffer();
 	_createFramebuffers();
 	_createSemaphores();
 }
@@ -101,6 +106,56 @@ void SwapChain::present()
 	}
 }
 
+void SwapChain::_createDepthBuffer()
+{
+	VkImageCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	info.tiling = VK_IMAGE_TILING_OPTIMAL;
+	info.extent.width = _swapChainInfo.surfaceCapabilities.currentExtent.width;
+	info.extent.height = _swapChainInfo.surfaceCapabilities.currentExtent.height;
+	info.extent.depth = 1;
+	info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	info.samples = VK_SAMPLE_COUNT_1_BIT;
+	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	info.mipLevels = 1;
+	info.arrayLayers = 1;
+	info.format = VK_FORMAT_D32_SFLOAT;
+	info.imageType = VK_IMAGE_TYPE_2D;
+
+	if (vkCreateImage(VulkanImpl::device(), &info, nullptr, &_depthImage) != VK_SUCCESS)
+	{
+		//
+	}
+
+	VkMemoryRequirements memReq;
+	vkGetImageMemoryRequirements(VulkanImpl::device(), _depthImage, &memReq);
+
+	VkMemoryAllocateInfo alloc = {};
+	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc.allocationSize = memReq.size;
+	alloc.memoryTypeIndex = _impl->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_depthMemory);
+
+	vkBindImageMemory(VulkanImpl::device(), _depthImage, _depthMemory, 0);
+
+	VkImageViewCreateInfo view = {};
+	view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	view.format = VK_FORMAT_D32_SFLOAT;
+	view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	view.image = _depthImage;
+	view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	view.subresourceRange.baseMipLevel = 0;
+	view.subresourceRange.baseArrayLayer = 0;
+	view.subresourceRange.layerCount = 1;
+	view.subresourceRange.levelCount = 1;
+	
+	if (vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_depthView) != VK_SUCCESS)
+	{
+		//
+	}
+}
+
 void SwapChain::_createFramebuffers()
 {
 	VkExtent2D extent = _swapChainInfo.surfaceCapabilities.currentExtent;
@@ -108,7 +163,7 @@ void SwapChain::_createFramebuffers()
 	for (VkImageView view : _imageViews)
 	{
 		const VkImageView attachments[] = {
-			view
+			view, _depthView
 		};
 
 		VkFramebufferCreateInfo info = {};
@@ -116,7 +171,7 @@ void SwapChain::_createFramebuffers()
 		info.width = extent.width;
 		info.height = extent.height;
 		info.renderPass = _impl->renderPass();
-		info.attachmentCount = 1;
+		info.attachmentCount = 2;
 		info.pAttachments = attachments;
 		info.layers = 1;
 		

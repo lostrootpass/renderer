@@ -52,11 +52,16 @@ private:
 	VkSwapchainKHR _vkSwapchain;
 	VkDevice _device;
 
+	VkImage _depthImage;
+	VkDeviceMemory _depthMemory;
+	VkImageView _depthView;
+
 	VkSemaphore _imageAvailableSemaphore;
 	VkSemaphore _renderingFinishedSemaphore;
 
 	SwapChainInfo _swapChainInfo;
 
+	void _createDepthBuffer();
 	void _createFramebuffers();
 	void _createImageViews();
 	void _createSemaphores();

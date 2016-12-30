@@ -171,6 +171,12 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 	vps.pViewports = &vp;
 	vps.pScissors = &sc;
 
+	VkPipelineDepthStencilStateCreateInfo dss = {};
+	dss.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	dss.depthTestEnable = VK_TRUE;
+	dss.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	dss.depthWriteEnable = VK_TRUE;
+
 	VkGraphicsPipelineCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	info.layout = _pipelineLayout;
@@ -183,6 +189,7 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 	info.pRasterizationState = &rs;
 	info.pVertexInputState = &vis;
 	info.pViewportState = &vps;
+	info.pDepthStencilState = &dss;
 
 	if (vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS)
 	{
@@ -236,7 +243,10 @@ void VulkanImpl::_allocateCommandBuffers()
 		//
 	}
 
-	VkClearValue clearColour = { 0.0f, 0.0f, 0.0f, 1.0f };
+	VkClearValue clearValues[] = {
+		{ 0.0f, 0.0f, 0.0f, 1.0f }, //Clear color
+		{ 1.0f, 0.0f } //Depth stencil
+	};
 
 	for (size_t i = 0; i < _commandBuffers.size(); i++)
 	{
@@ -248,8 +258,8 @@ void VulkanImpl::_allocateCommandBuffers()
 
 		VkRenderPassBeginInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		info.clearValueCount = 1;
-		info.pClearValues = &clearColour;
+		info.clearValueCount = 2;
+		info.pClearValues = clearValues;
 		info.renderPass = _renderPass;
 		info.renderArea.offset = { 0, 0 };
 		info.renderArea.extent = _swapChain->surfaceCapabilities().currentExtent;
@@ -390,6 +400,7 @@ void VulkanImpl::_createInstance()
 
 void VulkanImpl::_createRenderPass()
 {
+	//Color
 	VkAttachmentDescription attachDesc = {};
 	attachDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -409,6 +420,27 @@ void VulkanImpl::_createRenderPass()
 	subpass.pColorAttachments = &attachRef;
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
+
+	//Depth
+	VkAttachmentReference depthAttach = {};
+	depthAttach.attachment = 1;
+	depthAttach.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription depthPass = {};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.pDepthStencilAttachment = &depthAttach;
+
+	VkAttachmentDescription depthDesc = {};
+	depthDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+	depthDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depthDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	depthDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	depthDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	depthDesc.format = VK_FORMAT_D32_SFLOAT;
+
+
 	VkSubpassDependency dependency = {};
 	dependency.srcAccessMask = 0;
 	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -418,10 +450,12 @@ void VulkanImpl::_createRenderPass()
 	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependency.dstSubpass = 0;
 
+
+	VkAttachmentDescription attachments[] = { attachDesc, depthDesc };
 	VkRenderPassCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	info.attachmentCount = 1;
-	info.pAttachments = &attachDesc;
+	info.attachmentCount = 2;
+	info.pAttachments = attachments;
 	info.subpassCount = 1;
 	info.pSubpasses = &subpass;
 	info.dependencyCount = 1;

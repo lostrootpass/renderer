@@ -39,9 +39,24 @@ void Model::_load(VulkanImpl* renderer)
 		{ -0.5f, 0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f }
 	});
 
+	_vertices.push_back({
+		{ 0.25f, -0.25f, 0.5f },{ 1.0f, 0.0f, 0.0f }
+	});
+
+	_vertices.push_back({
+		{ 0.75f, 0.75f, 0.5f },{ 0.0f, 0.0f, 1.0f }
+	});
+
+	_vertices.push_back({
+		{ -0.25f, 0.75f, 0.5f },{ 0.0f, 1.0f, 0.0f }
+	});
+
 	_indices.push_back(0);
 	_indices.push_back(1);
 	_indices.push_back(2);
+	_indices.push_back(3);
+	_indices.push_back(4);
+	_indices.push_back(5);
 	//Test data end
 
 	char shaderName[128] = {'\0'};
