@@ -1,7 +1,10 @@
 #include "Model.h"
 #include "VulkanImpl.h"
 
-Model::Model(const std::string& name, VulkanImpl* renderer) : _name(name)
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
+Model::Model(const std::string& name, VulkanImpl* renderer) : _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f))
 {
 	_load(renderer);
 }
@@ -26,38 +29,7 @@ void Model::draw(VkCommandBuffer cmd)
 
 void Model::_load(VulkanImpl* renderer)
 {
-	//Test data begin
-	_vertices.push_back({
-		{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}
-	});
-
-	_vertices.push_back({
-		{ 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f }
-	});
-
-	_vertices.push_back({
-		{ -0.5f, 0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f }
-	});
-
-	_vertices.push_back({
-		{ 0.25f, -0.25f, 0.5f },{ 1.0f, 0.0f, 0.0f }
-	});
-
-	_vertices.push_back({
-		{ 0.75f, 0.75f, 0.5f },{ 0.0f, 0.0f, 1.0f }
-	});
-
-	_vertices.push_back({
-		{ -0.25f, 0.75f, 0.5f },{ 0.0f, 1.0f, 0.0f }
-	});
-
-	_indices.push_back(0);
-	_indices.push_back(1);
-	_indices.push_back(2);
-	_indices.push_back(3);
-	_indices.push_back(4);
-	_indices.push_back(5);
-	//Test data end
+	_loadModel();
 
 	char shaderName[128] = {'\0'};
 	sprintf_s(shaderName, "models/%s/%s", _name.c_str(), _name.c_str());
@@ -115,5 +87,41 @@ void Model::_load(VulkanImpl* renderer)
 
 		vkDestroyBuffer(VulkanImpl::device(), stagingBuffer, nullptr);
 		vkFreeMemory(VulkanImpl::device(), stagingMemory, nullptr);
+	}
+}
+
+void Model::_loadModel()
+{
+	char baseDir[128] = { '\0' };
+	sprintf_s(baseDir, "assets/models/%s/", _name.c_str());
+
+	char modelName[128] = { '\0' };
+	sprintf_s(modelName, "%s%s.obj", baseDir, _name.c_str());
+
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+	std::string err;
+
+	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, modelName, baseDir))
+		return;
+
+	const float scale = 1.0f;
+
+	for (const tinyobj::shape_t& shape : shapes)
+	{
+		for (tinyobj::index_t i : shape.mesh.indices)
+		{
+			Vertex vtx = {};
+			vtx.color = { 1.0f, 1.0f, 1.0f };
+			vtx.position = {
+				attrib.vertices[3 * i.vertex_index] * scale,
+				attrib.vertices[3 * i.vertex_index + 1] * scale,
+				attrib.vertices[3 * i.vertex_index + 2] * scale,
+			};
+
+			_vertices.push_back(vtx);
+			_indices.push_back((uint32_t)_indices.size());
+		}
 	}
 }

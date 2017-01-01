@@ -101,6 +101,10 @@ private:
 	VkDescriptorSet _descriptor;
 	VkSampler _sampler;
 	VkCommandPool _commandPool;
+	VkDescriptorPool _descriptorPool;
+
+	VkDeviceMemory _uniformMemory;
+	VkBuffer _uniformBuffer;
 
 	QueueInfo _graphicsQueue;
 	QueueInfo _presentQueue;
@@ -110,11 +114,13 @@ private:
 	void _allocateCommandBuffers();
 	void _cleanup();
 	void _createCommandPool();
+	void _createDescriptorSets();
 	void _createInstance();
 	void _createLayouts();
 	void _createRenderPass();
 	void _createSampler();
 	void _createSwapChain();
+	void _createUniforms();
 	void _initDevice();
 	void _loadTestModel();
 	VkPhysicalDevice _pickPhysicalDevice();

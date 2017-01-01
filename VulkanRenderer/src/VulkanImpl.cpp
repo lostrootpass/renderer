@@ -6,8 +6,20 @@
 
 #include <set>
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 VkDevice VulkanImpl::_device = VK_NULL_HANDLE;
 VkPhysicalDevice VulkanImpl::_physicalDevice = VK_NULL_HANDLE;
+
+struct MVP
+{
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
 
 VulkanImpl::VulkanImpl() : _swapChain(nullptr)
 {
@@ -215,6 +227,8 @@ void VulkanImpl::init(const Window& window)
 	_createRenderPass();
 	_createSwapChain();
 	_createLayouts();
+	_createUniforms();
+	_createDescriptorSets();
 
 	_loadTestModel();
 
@@ -268,6 +282,8 @@ void VulkanImpl::_allocateCommandBuffers()
 		vkBeginCommandBuffer(buffer, &beginInfo);
 
 		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+
+		vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptor, 0, nullptr);
 		
 		for (Model* model : _models)
 		{
@@ -290,6 +306,11 @@ void VulkanImpl::_cleanup()
 	}
 
 	_models.clear();
+
+	vkDestroyBuffer(_device, _uniformBuffer, nullptr);
+	vkFreeMemory(_device, _uniformMemory, nullptr);
+
+	vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
 
 	vkDestroySampler(_device, _sampler, nullptr);
 	ShaderCache::shutdown();
@@ -336,26 +357,49 @@ void VulkanImpl::_createCommandPool()
 	}
 }
 
-void VulkanImpl::_createLayouts()
+void VulkanImpl::_createDescriptorSets()
 {
-	VkDescriptorSetLayoutCreateInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	info.bindingCount = 0;
+	VkDescriptorPoolSize size = {};
+	size.descriptorCount = 1;
+	size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 
-	if(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayout) != VK_SUCCESS)
+	VkDescriptorPoolCreateInfo pool = {};
+	pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	pool.poolSizeCount = 1;
+	pool.pPoolSizes = &size;
+	pool.maxSets = 1;
+
+	if (vkCreateDescriptorPool(_device, &pool, nullptr, &_descriptorPool) != VK_SUCCESS)
 	{
 		//
 	}
 
-	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
-	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutCreateInfo.setLayoutCount = 1;
-	layoutCreateInfo.pSetLayouts = &_descriptorLayout;
-
-	if (vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout) != VK_SUCCESS)
+	VkDescriptorSetAllocateInfo alloc = {};
+	alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	alloc.descriptorPool = _descriptorPool;
+	alloc.pSetLayouts = &_descriptorLayout;
+	alloc.descriptorSetCount = 1;
+	
+	if (vkAllocateDescriptorSets(_device, &alloc, &_descriptor) != VK_SUCCESS)
 	{
 		//
 	}
+
+	VkDescriptorBufferInfo buff = {};
+	buff.buffer = _uniformBuffer;
+	buff.offset = 0;
+	buff.range = sizeof(MVP);
+
+	VkWriteDescriptorSet write = {};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.descriptorCount = 1;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	write.dstSet = _descriptor;
+	write.dstBinding = 0;
+	write.dstArrayElement = 0;
+	write.pBufferInfo = &buff;
+
+	vkUpdateDescriptorSets(_device, 1, &write, 0, nullptr);
 }
 
 void VulkanImpl::_createInstance()
@@ -393,6 +437,35 @@ void VulkanImpl::_createInstance()
 	}
 	
 	if (vkCreateInstance(&createInfo, nullptr, &_instance) != VK_SUCCESS)
+	{
+		//
+	}
+}
+
+void VulkanImpl::_createLayouts()
+{
+	VkDescriptorSetLayoutBinding binding = {};
+	binding.binding = 0;
+	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	binding.descriptorCount = 1;
+
+	VkDescriptorSetLayoutCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	info.bindingCount = 1;
+	info.pBindings = &binding;
+
+	if (vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayout) != VK_SUCCESS)
+	{
+		//
+	}
+
+	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
+	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutCreateInfo.setLayoutCount = 1;
+	layoutCreateInfo.pSetLayouts = &_descriptorLayout;
+
+	if (vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout) != VK_SUCCESS)
 	{
 		//
 	}
@@ -449,7 +522,6 @@ void VulkanImpl::_createRenderPass()
 	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependency.dstSubpass = 0;
-
 
 	VkAttachmentDescription attachments[] = { attachDesc, depthDesc };
 	VkRenderPassCreateInfo info = {};
@@ -535,6 +607,43 @@ void VulkanImpl::_createSwapChain()
 	_swapChain->init(info);
 }
 
+void VulkanImpl::_createUniforms()
+{
+	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
+	const float aspectRatio = (float)extent.width / (float)extent.height;
+	MVP mvp;
+	mvp.model = glm::translate(glm::mat4(), glm::vec3(0.0f, 0.0f, 0.0f));
+	mvp.view = glm::lookAt(glm::vec3(3.0f, 3.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	mvp.proj = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 100.0f);
+	mvp.proj[1][1] *= -1;
+
+	VkDeviceSize size = sizeof(mvp);
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingMemory;
+
+	VkBufferCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	info.size = size;
+
+	createAndBindBuffer(info, &stagingBuffer, &stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	void* dst;
+	vkMapMemory(_device, stagingMemory, 0, size, 0, &dst);
+	memcpy(dst, (void*)&mvp, sizeof(mvp));
+	vkUnmapMemory(_device, stagingMemory);
+
+	info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	createAndBindBuffer(info, &_uniformBuffer, &_uniformMemory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	copyBuffer(&_uniformBuffer, &stagingBuffer, sizeof(mvp));
+
+	vkDestroyBuffer(_device, stagingBuffer, nullptr);
+	vkFreeMemory(_device, stagingMemory, nullptr);
+}
+
 void VulkanImpl::_initDevice()
 {
 	_physicalDevice = _pickPhysicalDevice();
@@ -590,7 +699,7 @@ void VulkanImpl::_initDevice()
 
 void VulkanImpl::_loadTestModel()
 {
-	Model* model = new Model("triangle", this);
+	Model* model = new Model("cube", this);
 	_models.push_back(model);
 }
 
