@@ -13,6 +13,7 @@ struct Vertex
 {
 	glm::vec3 position;
 	glm::vec3 color;
+	glm::vec2 uv;
 };
 
 class Model
@@ -26,6 +27,11 @@ public:
 	const std::string& name() const
 	{
 		return _name;
+	}
+
+	const VkImageView texView() const
+	{
+		return _texView;
 	}
 
 private:
@@ -42,8 +48,13 @@ private:
 	VkBuffer _indexBuffer;
 	VkDeviceMemory _idxMemory;
 
+	VkImage _texImage;
+	VkImageView _texView;
+	VkDeviceMemory _texMemory;
+
 	void _load(VulkanImpl* renderer);
-	void _loadModel();
+	void _loadTexture(VulkanImpl* renderer, const std::string& path);
+	void _loadModel(VulkanImpl* renderer);
 };
 
 #endif //MODEL_H_

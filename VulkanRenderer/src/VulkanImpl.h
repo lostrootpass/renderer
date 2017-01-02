@@ -36,6 +36,12 @@ public:
 
 	void render();
 
+	void setImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange& range) const;
+
+	VkCommandBuffer startOneShotCmdBuffer() const;
+
+	void submitOneShotCmdBuffer(VkCommandBuffer buffer) const;
+
 	inline const VkCommandBuffer commandBuffer(size_t idx) const
 	{
 		if (idx >= _commandBuffers.size())

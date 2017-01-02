@@ -33,35 +33,14 @@ VulkanImpl::~VulkanImpl()
 
 void VulkanImpl::copyBuffer(VkBuffer* dst, VkBuffer* src, VkDeviceSize size) const
 {
-	VkCommandBufferAllocateInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	info.commandPool = _commandPool;
-	info.commandBufferCount = 1;
-	info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-	VkCommandBuffer buffer;
-	vkAllocateCommandBuffers(_device, &info, &buffer);
-
-	VkCommandBufferBeginInfo begin = {};
-	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	VkCommandBuffer buffer = startOneShotCmdBuffer();
 
 	VkBufferCopy copy = {};
 	copy.size = size;
 
-	VkSubmitInfo submit = {};
-	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submit.commandBufferCount = 1;
-	submit.pCommandBuffers = &buffer;
-
-	vkBeginCommandBuffer(buffer, &begin);
 	vkCmdCopyBuffer(buffer, *src, *dst, 1, &copy);
-	vkEndCommandBuffer(buffer);
-
-	vkQueueSubmit(_graphicsQueue.vkQueue, 1, &submit, VK_NULL_HANDLE);
-	vkQueueWaitIdle(_graphicsQueue.vkQueue);
-
-	vkFreeCommandBuffers(_device, _commandPool, 1, &buffer);
+	
+	submitOneShotCmdBuffer(buffer);
 }
 
 void VulkanImpl::createAndBindBuffer(const VkBufferCreateInfo& info, VkBuffer* buffer, VkDeviceMemory* memory, VkMemoryPropertyFlags flags) const
@@ -142,14 +121,14 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 	rs.cullMode = VK_CULL_MODE_BACK_BIT;
 	rs.polygonMode = VK_POLYGON_MODE_FILL;
 	rs.lineWidth = 1.0f;
-	rs.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
 	VkVertexInputBindingDescription vbs = {};
 	vbs.binding = 0;
 	vbs.stride = sizeof(Vertex);
 	vbs.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-	VkVertexInputAttributeDescription vtxAttrs[2] = {};
+	VkVertexInputAttributeDescription vtxAttrs[3] = {};
 	vtxAttrs[0].binding = 0;
 	vtxAttrs[0].location = 0;
 	vtxAttrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -160,11 +139,16 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 	vtxAttrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 	vtxAttrs[1].offset = offsetof(Vertex, color);
 
+	vtxAttrs[2].binding = 0;
+	vtxAttrs[2].location = 2;
+	vtxAttrs[2].format = VK_FORMAT_R32G32_SFLOAT;
+	vtxAttrs[2].offset = offsetof(Vertex, uv);
+
 	VkPipelineVertexInputStateCreateInfo vis = {};
 	vis.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vis.vertexBindingDescriptionCount = 1;
 	vis.pVertexBindingDescriptions = &vbs;
-	vis.vertexAttributeDescriptionCount = 2;
+	vis.vertexAttributeDescriptionCount = 3;
 	vis.pVertexAttributeDescriptions = vtxAttrs;
 
 	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
@@ -228,17 +212,87 @@ void VulkanImpl::init(const Window& window)
 	_createSwapChain();
 	_createLayouts();
 	_createUniforms();
+	_createSampler();
+	_loadTestModel();
 	_createDescriptorSets();
 
-	_loadTestModel();
-
 	_allocateCommandBuffers();
-	_createSampler();
 }
 
 void VulkanImpl::render()
 {
 	_swapChain->present();
+}
+
+void VulkanImpl::setImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange& range) const
+{
+	VkCommandBuffer buffer = startOneShotCmdBuffer();
+
+	VkImageMemoryBarrier barrier = {};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = oldLayout;
+	barrier.newLayout = newLayout;
+	barrier.image = image;
+	barrier.subresourceRange = range;
+
+	switch (oldLayout)
+	{
+	case VK_IMAGE_LAYOUT_PREINITIALIZED:
+		barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+		break;
+	case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		break;
+	}
+
+	switch (newLayout)
+	{
+	case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		break;
+	case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		break;
+	}
+
+	vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);	
+
+	submitOneShotCmdBuffer(buffer);
+}
+
+VkCommandBuffer VulkanImpl::startOneShotCmdBuffer() const
+{
+	VkCommandBufferAllocateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	info.commandPool = _commandPool;
+	info.commandBufferCount = 1;
+	info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+	VkCommandBuffer buffer;
+	vkAllocateCommandBuffers(_device, &info, &buffer);
+
+	VkCommandBufferBeginInfo begin = {};
+	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	vkBeginCommandBuffer(buffer, &begin);
+
+	return buffer;
+}
+
+void VulkanImpl::submitOneShotCmdBuffer(VkCommandBuffer buffer) const
+{
+	vkEndCommandBuffer(buffer);
+
+	VkSubmitInfo submit = {};
+	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit.commandBufferCount = 1;
+	submit.pCommandBuffers = &buffer;
+
+	vkQueueSubmit(_graphicsQueue.vkQueue, 1, &submit, VK_NULL_HANDLE);
+	vkQueueWaitIdle(_graphicsQueue.vkQueue);
+
+	vkFreeCommandBuffers(_device, _commandPool, 1, &buffer);
 }
 
 void VulkanImpl::_allocateCommandBuffers()
@@ -359,14 +413,17 @@ void VulkanImpl::_createCommandPool()
 
 void VulkanImpl::_createDescriptorSets()
 {
-	VkDescriptorPoolSize size = {};
-	size.descriptorCount = 1;
-	size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	VkDescriptorPoolSize sizes[2] = {};
+	sizes[0].descriptorCount = 1;
+	sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+	sizes[1].descriptorCount = 1;
+	sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
 	VkDescriptorPoolCreateInfo pool = {};
 	pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	pool.poolSizeCount = 1;
-	pool.pPoolSizes = &size;
+	pool.poolSizeCount = 2;
+	pool.pPoolSizes = sizes;
 	pool.maxSets = 1;
 
 	if (vkCreateDescriptorPool(_device, &pool, nullptr, &_descriptorPool) != VK_SUCCESS)
@@ -390,16 +447,29 @@ void VulkanImpl::_createDescriptorSets()
 	buff.offset = 0;
 	buff.range = sizeof(MVP);
 
-	VkWriteDescriptorSet write = {};
-	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	write.descriptorCount = 1;
-	write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	write.dstSet = _descriptor;
-	write.dstBinding = 0;
-	write.dstArrayElement = 0;
-	write.pBufferInfo = &buff;
+	VkDescriptorImageInfo img = {};
+	img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	img.sampler = _sampler;
+	img.imageView = _models[0]->texView();
 
-	vkUpdateDescriptorSets(_device, 1, &write, 0, nullptr);
+	VkWriteDescriptorSet writes[2] = {};
+	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[0].descriptorCount = 1;
+	writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	writes[0].dstSet = _descriptor;
+	writes[0].dstBinding = 0;
+	writes[0].dstArrayElement = 0;
+	writes[0].pBufferInfo = &buff;
+
+	writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[1].descriptorCount = 1;
+	writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	writes[1].dstSet = _descriptor;
+	writes[1].dstBinding = 1;
+	writes[1].dstArrayElement = 0;
+	writes[1].pImageInfo = &img;
+
+	vkUpdateDescriptorSets(_device, 2, writes, 0, nullptr);
 }
 
 void VulkanImpl::_createInstance()
@@ -444,16 +514,21 @@ void VulkanImpl::_createInstance()
 
 void VulkanImpl::_createLayouts()
 {
-	VkDescriptorSetLayoutBinding binding = {};
-	binding.binding = 0;
-	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	binding.descriptorCount = 1;
+	VkDescriptorSetLayoutBinding bindings[2] = {};
+	bindings[0].binding = 0;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	bindings[0].descriptorCount = 1;
+
+	bindings[1].binding = 1;
+	bindings[1].descriptorCount = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	VkDescriptorSetLayoutCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	info.bindingCount = 1;
-	info.pBindings = &binding;
+	info.bindingCount = 2;
+	info.pBindings = bindings;
 
 	if (vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayout) != VK_SUCCESS)
 	{
