@@ -395,7 +395,11 @@ void VulkanImpl::_cleanup()
 	_pipelines.clear();
 
 	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
-	vkDestroyDescriptorSetLayout(_device, _descriptorLayout, nullptr);
+
+	for (VkDescriptorSetLayout layout : _descriptorLayouts)
+	{
+		vkDestroyDescriptorSetLayout(_device, layout, nullptr);
+	}
 
 	delete _swapChain;
 	_swapChain = nullptr;
@@ -576,8 +580,6 @@ void VulkanImpl::_createLayouts()
 	{
 		//
 	}
-
-	_descriptorLayout = layouts[0];
 
 	info.bindingCount = 2;
 	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[1]);

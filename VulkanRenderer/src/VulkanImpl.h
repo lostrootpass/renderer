@@ -110,8 +110,6 @@ private:
 	VkSurfaceKHR _surface;
 	VkRenderPass _renderPass;
 	VkPipelineLayout _pipelineLayout;
-	VkDescriptorSetLayout _descriptorLayout;
-	VkDescriptorSet _descriptor;
 	VkSampler _sampler;
 	VkCommandPool _commandPool;
 	VkDescriptorPool _descriptorPool;
