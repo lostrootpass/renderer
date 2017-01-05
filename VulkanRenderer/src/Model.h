@@ -22,7 +22,7 @@ public:
 	Model(const std::string& name, VulkanImpl* renderer);
 	~Model();
 
-	void draw(VkCommandBuffer cmd);
+	void draw(VulkanImpl* renderer, VkCommandBuffer cmd);
 
 	const std::string& name() const
 	{

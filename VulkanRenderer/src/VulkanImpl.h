@@ -10,6 +10,8 @@
 #include "Window.h"
 #include "Model.h"
 
+struct Uniform;
+
 typedef class VulkanImpl
 {
 public:
@@ -42,6 +44,8 @@ public:
 
 	void submitOneShotCmdBuffer(VkCommandBuffer buffer) const;
 
+	void updateUniform(const std::string& name, void* data, size_t size);
+
 	inline const VkCommandBuffer commandBuffer(size_t idx) const
 	{
 		if (idx >= _commandBuffers.size())
@@ -65,7 +69,7 @@ public:
 		return _instance;
 	}
 
-	inline static const VkPhysicalDevice physicalDevice()
+	inline const VkPhysicalDevice physicalDevice() const
 	{
 		return _physicalDevice;
 	}
@@ -94,7 +98,10 @@ private:
 
 	std::vector<VkCommandBuffer> _commandBuffers;
 	std::vector<Model*> _models;
+	std::vector<VkDescriptorSetLayout> _descriptorLayouts;
+	std::vector<VkDescriptorSet> _descriptorSets;
 	std::unordered_map<std::string, VkPipeline> _pipelines;
+	std::unordered_map<std::string, Uniform*> _uniforms;
 
 	static VkDevice _device;
 	static VkPhysicalDevice _physicalDevice;
@@ -108,9 +115,6 @@ private:
 	VkSampler _sampler;
 	VkCommandPool _commandPool;
 	VkDescriptorPool _descriptorPool;
-
-	VkDeviceMemory _uniformMemory;
-	VkBuffer _uniformBuffer;
 
 	QueueInfo _graphicsQueue;
 	QueueInfo _presentQueue;
@@ -133,5 +137,24 @@ private:
 	void _queryDeviceQueueFamilies(VkPhysicalDevice device);
 	void _registerDebugger();
 } Renderer;
+
+struct Uniform
+{
+	VkDeviceMemory memory;
+	VkBuffer buffer;
+
+	VkDeviceMemory stagingMemory;
+	VkBuffer stagingBuffer;
+
+	~Uniform()
+	{
+		vkDestroyBuffer(VulkanImpl::device(), stagingBuffer, nullptr);
+		vkFreeMemory(VulkanImpl::device(), stagingMemory, nullptr);
+
+		vkDestroyBuffer(VulkanImpl::device(), buffer, nullptr);
+		vkFreeMemory(VulkanImpl::device(), memory, nullptr);
+	}
+};
+
 
 #endif //VULKAN_IMPL_H_

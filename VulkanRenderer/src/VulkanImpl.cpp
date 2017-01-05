@@ -14,12 +14,11 @@
 VkDevice VulkanImpl::_device = VK_NULL_HANDLE;
 VkPhysicalDevice VulkanImpl::_physicalDevice = VK_NULL_HANDLE;
 
-struct MVP
+typedef enum SetBindings
 {
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
-};
+	SET_BINDING_CAMERA,
+	SET_BINDING_MODEL
+} SetBindings;
 
 VulkanImpl::VulkanImpl() : _swapChain(nullptr)
 {
@@ -295,6 +294,21 @@ void VulkanImpl::submitOneShotCmdBuffer(VkCommandBuffer buffer) const
 	vkFreeCommandBuffers(_device, _commandPool, 1, &buffer);
 }
 
+void VulkanImpl::updateUniform(const std::string& name, void* data, size_t size)
+{
+	if (_uniforms.find(name) == _uniforms.end())
+		return;
+
+	Uniform* uniform = _uniforms[name];
+
+	void* dst;
+	vkMapMemory(_device, uniform->stagingMemory, 0, size, 0, &dst);
+	memcpy(dst, data, size);
+	vkUnmapMemory(_device, uniform->stagingMemory);
+
+	copyBuffer(&uniform->buffer, &uniform->stagingBuffer, size);
+}
+
 void VulkanImpl::_allocateCommandBuffers()
 {
 	const std::vector<VkFramebuffer> framebuffers = _swapChain->framebuffers();
@@ -337,11 +351,11 @@ void VulkanImpl::_allocateCommandBuffers()
 
 		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 
-		vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptor, 0, nullptr);
+		vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 2, _descriptorSets.data(), 0, nullptr);
 		
 		for (Model* model : _models)
 		{
-			model->draw(buffer);
+			model->draw(this, buffer);
 		}
 
 		vkCmdEndRenderPass(buffer);
@@ -361,8 +375,12 @@ void VulkanImpl::_cleanup()
 
 	_models.clear();
 
-	vkDestroyBuffer(_device, _uniformBuffer, nullptr);
-	vkFreeMemory(_device, _uniformMemory, nullptr);
+	for (auto pair : _uniforms)
+	{
+		delete pair.second;
+	}
+
+	_uniforms.clear();
 
 	vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
 
@@ -414,7 +432,7 @@ void VulkanImpl::_createCommandPool()
 void VulkanImpl::_createDescriptorSets()
 {
 	VkDescriptorPoolSize sizes[2] = {};
-	sizes[0].descriptorCount = 1;
+	sizes[0].descriptorCount = 2;
 	sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 
 	sizes[1].descriptorCount = 1;
@@ -424,7 +442,7 @@ void VulkanImpl::_createDescriptorSets()
 	pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	pool.poolSizeCount = 2;
 	pool.pPoolSizes = sizes;
-	pool.maxSets = 1;
+	pool.maxSets = 2;
 
 	if (vkCreateDescriptorPool(_device, &pool, nullptr, &_descriptorPool) != VK_SUCCESS)
 	{
@@ -434,42 +452,64 @@ void VulkanImpl::_createDescriptorSets()
 	VkDescriptorSetAllocateInfo alloc = {};
 	alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	alloc.descriptorPool = _descriptorPool;
-	alloc.pSetLayouts = &_descriptorLayout;
-	alloc.descriptorSetCount = 1;
+	alloc.pSetLayouts = _descriptorLayouts.data();
+	alloc.descriptorSetCount = (uint32_t)_descriptorLayouts.size();
+
+	_descriptorSets.resize(2);
 	
-	if (vkAllocateDescriptorSets(_device, &alloc, &_descriptor) != VK_SUCCESS)
+	if (vkAllocateDescriptorSets(_device, &alloc, _descriptorSets.data()) != VK_SUCCESS)
 	{
 		//
 	}
 
-	VkDescriptorBufferInfo buff = {};
-	buff.buffer = _uniformBuffer;
-	buff.offset = 0;
-	buff.range = sizeof(MVP);
+	{
+		VkDescriptorBufferInfo buff = {};
+		buff.buffer = _uniforms["camera"]->buffer;
+		buff.offset = 0;
+		buff.range = sizeof(glm::mat4);
 
-	VkDescriptorImageInfo img = {};
-	img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	img.sampler = _sampler;
-	img.imageView = _models[0]->texView();
+		VkWriteDescriptorSet writes[1] = {};
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].descriptorCount = 1;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writes[0].dstSet = _descriptorSets[SET_BINDING_CAMERA];
+		writes[0].dstBinding = 0;
+		writes[0].dstArrayElement = 0;
+		writes[0].pBufferInfo = &buff;
 
-	VkWriteDescriptorSet writes[2] = {};
-	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writes[0].descriptorCount = 1;
-	writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	writes[0].dstSet = _descriptor;
-	writes[0].dstBinding = 0;
-	writes[0].dstArrayElement = 0;
-	writes[0].pBufferInfo = &buff;
+		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
+	}
 
-	writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writes[1].descriptorCount = 1;
-	writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	writes[1].dstSet = _descriptor;
-	writes[1].dstBinding = 1;
-	writes[1].dstArrayElement = 0;
-	writes[1].pImageInfo = &img;
+	{
+		VkDescriptorBufferInfo buff = {};
+		buff.buffer = _uniforms["model"]->buffer;
+		buff.offset = 0;
+		buff.range = sizeof(glm::mat4);
 
-	vkUpdateDescriptorSets(_device, 2, writes, 0, nullptr);
+		VkDescriptorImageInfo img = {};
+		img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		img.sampler = _sampler;
+		img.imageView = _models[0]->texView();
+
+		VkWriteDescriptorSet writes[2] = {};
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].descriptorCount = 1;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writes[0].dstSet = _descriptorSets[SET_BINDING_MODEL];
+		writes[0].dstBinding = 0;
+		writes[0].dstArrayElement = 0;
+		writes[0].pBufferInfo = &buff;
+
+		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[1].descriptorCount = 1;
+		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writes[1].dstSet = _descriptorSets[SET_BINDING_MODEL];
+		writes[1].dstBinding = 1;
+		writes[1].dstArrayElement = 0;
+		writes[1].pImageInfo = &img;
+
+		vkUpdateDescriptorSets(_device, 2, writes, 0, nullptr);
+	}
 }
 
 void VulkanImpl::_createInstance()
@@ -527,18 +567,28 @@ void VulkanImpl::_createLayouts()
 
 	VkDescriptorSetLayoutCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	info.bindingCount = 2;
+	info.bindingCount = 1;
 	info.pBindings = bindings;
 
-	if (vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayout) != VK_SUCCESS)
+	VkDescriptorSetLayout layouts[2];
+
+	if (vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[0]) != VK_SUCCESS)
 	{
 		//
 	}
 
+	_descriptorLayout = layouts[0];
+
+	info.bindingCount = 2;
+	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[1]);
+
+	_descriptorLayouts.push_back(layouts[0]);
+	_descriptorLayouts.push_back(layouts[1]);
+
 	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutCreateInfo.setLayoutCount = 1;
-	layoutCreateInfo.pSetLayouts = &_descriptorLayout;
+	layoutCreateInfo.pSetLayouts = _descriptorLayouts.data();
+	layoutCreateInfo.setLayoutCount = (uint32_t)_descriptorLayouts.size();
 
 	if (vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout) != VK_SUCCESS)
 	{
@@ -684,18 +734,12 @@ void VulkanImpl::_createSwapChain()
 
 void VulkanImpl::_createUniforms()
 {
-	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
-	const float aspectRatio = (float)extent.width / (float)extent.height;
-	MVP mvp;
-	mvp.model = glm::translate(glm::mat4(), glm::vec3(0.0f, 0.0f, 0.0f));
-	mvp.view = glm::lookAt(glm::vec3(3.0f, 3.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	mvp.proj = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 100.0f);
-	mvp.proj[1][1] *= -1;
+	Uniform* mvpUniform = new Uniform;
+	_uniforms["model"] = mvpUniform;
 
-	VkDeviceSize size = sizeof(mvp);
+	glm::mat4 model = glm::translate(glm::mat4(), glm::vec3(0.0f, 0.0f, 0.0f));
 
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingMemory;
+	VkDeviceSize size = sizeof(model);
 
 	VkBufferCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -703,20 +747,36 @@ void VulkanImpl::_createUniforms()
 	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	info.size = size;
 
-	createAndBindBuffer(info, &stagingBuffer, &stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	void* dst;
-	vkMapMemory(_device, stagingMemory, 0, size, 0, &dst);
-	memcpy(dst, (void*)&mvp, sizeof(mvp));
-	vkUnmapMemory(_device, stagingMemory);
+	createAndBindBuffer(info, &mvpUniform->stagingBuffer, &mvpUniform->stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 	info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	createAndBindBuffer(info, &_uniformBuffer, &_uniformMemory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	createAndBindBuffer(info, &mvpUniform->buffer, &mvpUniform->memory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-	copyBuffer(&_uniformBuffer, &stagingBuffer, sizeof(mvp));
+	updateUniform("model", (void*)&model, sizeof(model));
 
-	vkDestroyBuffer(_device, stagingBuffer, nullptr);
-	vkFreeMemory(_device, stagingMemory, nullptr);
+	//
+
+	Uniform* cameraUniform = new Uniform;
+	_uniforms["camera"] = cameraUniform;
+
+	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
+	const float aspectRatio = (float)extent.width / (float)extent.height;
+	glm::mat4 view = glm::lookAt(glm::vec3(3.0f, 3.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::mat4 proj = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 100.0f);
+	proj[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
+
+	glm::mat4 projView = proj * view;
+
+	size = sizeof(projView);
+	info.size = size;
+	info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+	createAndBindBuffer(info, &cameraUniform->stagingBuffer, &cameraUniform->stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	createAndBindBuffer(info, &cameraUniform->buffer, &cameraUniform->memory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	updateUniform("camera", (void*)&projView, sizeof(projView));
 }
 
 void VulkanImpl::_initDevice()

@@ -7,6 +7,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <glm/gtc/matrix_transform.hpp>
+
 Model::Model(const std::string& name, VulkanImpl* renderer) : _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f))
 {
 	_load(renderer);
@@ -24,8 +26,11 @@ Model::~Model()
 	vkFreeMemory(VulkanImpl::device(), _texMemory, nullptr);
 }
 
-void Model::draw(VkCommandBuffer cmd)
+void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 {
+	glm::mat4 model = glm::translate(glm::mat4(), _position);
+	renderer->updateUniform("model", (void*)&model, sizeof(model));
+
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 
 	VkDeviceSize offsets[] = { 0 };
