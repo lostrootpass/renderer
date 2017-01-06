@@ -118,6 +118,7 @@ private:
 	QueueInfo _presentQueue;
 
 	class SwapChain* _swapChain;
+	struct Camera* _camera;
 
 	void _allocateCommandBuffers();
 	void _cleanup();

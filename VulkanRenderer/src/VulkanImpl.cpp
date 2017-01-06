@@ -3,13 +3,13 @@
 #include "SwapChain.h"
 #include "ShaderCache.h"
 #include "Model.h"
+#include "Camera.h"
 
 #include <set>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 
 VkDevice VulkanImpl::_device = VK_NULL_HANDLE;
 VkPhysicalDevice VulkanImpl::_physicalDevice = VK_NULL_HANDLE;
@@ -366,6 +366,8 @@ void VulkanImpl::_allocateCommandBuffers()
 
 void VulkanImpl::_cleanup()
 {
+	delete _camera;
+
 	vkDeviceWaitIdle(_device);
 
 	for (Model* model : _models)
@@ -762,12 +764,8 @@ void VulkanImpl::_createUniforms()
 	_uniforms["camera"] = cameraUniform;
 
 	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
-	const float aspectRatio = (float)extent.width / (float)extent.height;
-	glm::mat4 view = glm::lookAt(glm::vec3(3.0f, 3.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	glm::mat4 proj = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 100.0f);
-	proj[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
-
-	glm::mat4 projView = proj * view;
+	_camera = new Camera(extent.width, extent.height);
+	glm::mat4 projView = _camera->projectionViewMatrix();
 
 	size = sizeof(projView);
 	info.size = size;
