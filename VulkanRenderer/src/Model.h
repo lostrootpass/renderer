@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "Texture.h"
+
 class VulkanImpl;
 
 struct Vertex
@@ -31,7 +33,7 @@ public:
 
 	const VkImageView texView() const
 	{
-		return _texView;
+		return _texture->view();
 	}
 
 private:
@@ -48,12 +50,10 @@ private:
 	VkBuffer _indexBuffer;
 	VkDeviceMemory _idxMemory;
 
-	VkImage _texImage;
-	VkImageView _texView;
-	VkDeviceMemory _texMemory;
+	Texture* _texture;
 
 	void _load(VulkanImpl* renderer);
-	void _loadTexture(VulkanImpl* renderer, const std::string& path);
+	void _loadTexture(const std::string& path, VulkanImpl* renderer);
 	void _loadModel(VulkanImpl* renderer);
 };
 

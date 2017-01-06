@@ -1,0 +1,110 @@
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
+#include "Texture.h"
+#include "VulkanImpl.h"
+
+Texture::Texture(const std::string& path, VulkanImpl* renderer) : _path(path)
+{
+	_load(renderer);
+}
+
+Texture::~Texture()
+{
+	vkDestroyImageView(VulkanImpl::device(), _view, nullptr);
+	vkDestroyImage(VulkanImpl::device(), _image, nullptr);
+	vkFreeMemory(VulkanImpl::device(), _memory, nullptr);
+}
+
+
+void Texture::_load(VulkanImpl* renderer)
+{
+	int width, height, channels;
+	stbi_uc* tex = stbi_load(_path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+
+	if (!tex)
+		return;
+
+	VkDeviceSize size = width * height * channels;
+
+	VkBufferCreateInfo buff = {};
+	buff.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	buff.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	buff.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	buff.size = size;
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingMemory;
+	renderer->createAndBindBuffer(buff, &stagingBuffer, &stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	void* dst;
+	vkMapMemory(VulkanImpl::device(), stagingMemory, 0, size, 0, &dst);
+	memcpy(dst, (void*)tex, size);
+	vkUnmapMemory(VulkanImpl::device(), stagingMemory);
+
+	VkImageCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	info.imageType = VK_IMAGE_TYPE_2D;
+	info.extent = { (uint32_t)width, (uint32_t)height, 1 };
+	info.arrayLayers = 1;
+	info.mipLevels = 1;
+	info.format = VK_FORMAT_R8G8B8A8_UNORM;
+	info.tiling = VK_IMAGE_TILING_OPTIMAL;
+	info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	info.samples = VK_SAMPLE_COUNT_1_BIT;
+
+	if (vkCreateImage(VulkanImpl::device(), &info, nullptr, &_image) != VK_SUCCESS)
+	{
+		//
+	}
+
+	VkMemoryRequirements memReq;
+	vkGetImageMemoryRequirements(VulkanImpl::device(), _image, &memReq);
+
+	VkMemoryAllocateInfo alloc = {};
+	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc.memoryTypeIndex = renderer->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	alloc.allocationSize = size;
+
+	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_memory);
+	vkBindImageMemory(VulkanImpl::device(), _image, _memory, 0);
+
+	VkImageSubresourceRange range = {};
+	range.layerCount = 1;
+	range.levelCount = 1;
+	range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	renderer->setImageLayout(_image, info.format, info.initialLayout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, range);
+
+	VkBufferImageCopy copy = {};
+	copy.imageExtent = info.extent;
+	copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copy.imageSubresource.layerCount = 1;
+
+	//If this doesn't match what was provided above, vkCmdCopyBufferToImage fails with a misleading/unhelpful message.
+	copy.imageSubresource.mipLevel = 0;
+
+	VkCommandBuffer cmd = renderer->startOneShotCmdBuffer();
+	vkCmdCopyBufferToImage(cmd, stagingBuffer, _image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+	renderer->submitOneShotCmdBuffer(cmd);
+
+	renderer->setImageLayout(_image, info.format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, range);
+
+	vkDestroyBuffer(VulkanImpl::device(), stagingBuffer, nullptr);
+	vkFreeMemory(VulkanImpl::device(), stagingMemory, nullptr);
+
+	stbi_image_free(tex);
+
+
+	VkImageViewCreateInfo view = {};
+	view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	view.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+	view.image = _image;
+	view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	view.format = info.format;
+	view.subresourceRange = range;
+
+	vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_view);
+}
