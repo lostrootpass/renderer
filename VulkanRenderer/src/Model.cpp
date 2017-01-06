@@ -13,11 +13,6 @@ Model::Model(const std::string& name, VulkanImpl* renderer) : _name(name), _posi
 
 Model::~Model()
 {
-	vkDestroyBuffer(VulkanImpl::device(), _vertexBuffer, nullptr);
-	vkDestroyBuffer(VulkanImpl::device(), _indexBuffer, nullptr);
-	vkFreeMemory(VulkanImpl::device(), _vtxMemory, nullptr);
-	vkFreeMemory(VulkanImpl::device(), _idxMemory, nullptr);
-
 	delete _texture;
 }
 
@@ -29,8 +24,8 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 
 	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(cmd, 0, 1, &_vertexBuffer, offsets);
-	vkCmdBindIndexBuffer(cmd, _indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindVertexBuffers(cmd, 0, 1, &_vertexBuffer.buffer, offsets);
+	vkCmdBindIndexBuffer(cmd, _indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(cmd, (uint32_t)_indices.size(), 1, 0, 0, 0);
 }
 
@@ -51,22 +46,18 @@ void Model::_load(VulkanImpl* renderer)
 		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		info.size = size;
 
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingMemory;
-		renderer->createAndBindBuffer(info, &stagingBuffer, &stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		Buffer staging;
+		renderer->createAndBindBuffer(info, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		void* dst;
-		vkMapMemory(VulkanImpl::device(), stagingMemory, 0, size, 0, &dst);
+		vkMapMemory(VulkanImpl::device(), staging.memory, 0, size, 0, &dst);
 		memcpy(dst, (void*)_vertices.data(), size);
-		vkUnmapMemory(VulkanImpl::device(), stagingMemory);
+		vkUnmapMemory(VulkanImpl::device(), staging.memory);
 
 		info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-		renderer->createAndBindBuffer(info, &_vertexBuffer, &_vtxMemory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		renderer->createAndBindBuffer(info, _vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-		renderer->copyBuffer(&_vertexBuffer, &stagingBuffer, size);
-
-		vkDestroyBuffer(VulkanImpl::device(), stagingBuffer, nullptr);
-		vkFreeMemory(VulkanImpl::device(), stagingMemory, nullptr);
+		renderer->copyBuffer(_vertexBuffer, staging, size);
 	}
 
 	//Index buffer
@@ -78,22 +69,18 @@ void Model::_load(VulkanImpl* renderer)
 		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		info.size = size;
 
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingMemory;
-		renderer->createAndBindBuffer(info, &stagingBuffer, &stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		Buffer staging;
+		renderer->createAndBindBuffer(info, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		void* dst;
-		vkMapMemory(VulkanImpl::device(), stagingMemory, 0, size, 0, &dst);
+		vkMapMemory(VulkanImpl::device(), staging.memory, 0, size, 0, &dst);
 		memcpy(dst, (void*)_indices.data(), size);
-		vkUnmapMemory(VulkanImpl::device(), stagingMemory);
+		vkUnmapMemory(VulkanImpl::device(), staging.memory);
 
 		info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-		renderer->createAndBindBuffer(info, &_indexBuffer, &_idxMemory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		renderer->createAndBindBuffer(info, _indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-		renderer->copyBuffer(&_indexBuffer, &stagingBuffer, size);
-
-		vkDestroyBuffer(VulkanImpl::device(), stagingBuffer, nullptr);
-		vkFreeMemory(VulkanImpl::device(), stagingMemory, nullptr);
+		renderer->copyBuffer(_indexBuffer, staging, size);
 	}
 }
 

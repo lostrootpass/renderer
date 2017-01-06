@@ -30,36 +30,33 @@ VulkanImpl::~VulkanImpl()
 	_cleanup();
 }
 
-void VulkanImpl::copyBuffer(VkBuffer* dst, VkBuffer* src, VkDeviceSize size) const
+void VulkanImpl::copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size) const
 {
 	VkCommandBuffer buffer = startOneShotCmdBuffer();
 
 	VkBufferCopy copy = {};
 	copy.size = size;
 
-	vkCmdCopyBuffer(buffer, *src, *dst, 1, &copy);
+	vkCmdCopyBuffer(buffer, src.buffer, dst.buffer, 1, &copy);
 	
 	submitOneShotCmdBuffer(buffer);
 }
 
-void VulkanImpl::createAndBindBuffer(const VkBufferCreateInfo& info, VkBuffer* buffer, VkDeviceMemory* memory, VkMemoryPropertyFlags flags) const
+void VulkanImpl::createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buffer, VkMemoryPropertyFlags flags) const
 {
-	if (!buffer || !memory)
-		return;
-
 	VkMemoryRequirements memReq;
 
-	vkCreateBuffer(_device, &info, nullptr, buffer);
-	vkGetBufferMemoryRequirements(VulkanImpl::device(), *buffer, &memReq);
+	vkCreateBuffer(_device, &info, nullptr, &buffer.buffer);
+	vkGetBufferMemoryRequirements(VulkanImpl::device(), buffer.buffer, &memReq);
 
 	VkMemoryAllocateInfo alloc = {};
 	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	alloc.allocationSize = memReq.size;
 	alloc.memoryTypeIndex = getMemoryTypeIndex(memReq.memoryTypeBits, flags);
 
-	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, memory);
+	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &buffer.memory);
 
-	vkBindBufferMemory(VulkanImpl::device(), *buffer, *memory, 0);
+	vkBindBufferMemory(VulkanImpl::device(), buffer.buffer, buffer.memory, 0);
 }
 
 uint32_t VulkanImpl::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const
@@ -302,11 +299,11 @@ void VulkanImpl::updateUniform(const std::string& name, void* data, size_t size)
 	Uniform* uniform = _uniforms[name];
 
 	void* dst;
-	vkMapMemory(_device, uniform->stagingMemory, 0, size, 0, &dst);
+	vkMapMemory(_device, uniform->stagingBuffer.memory, 0, size, 0, &dst);
 	memcpy(dst, data, size);
-	vkUnmapMemory(_device, uniform->stagingMemory);
+	vkUnmapMemory(_device, uniform->stagingBuffer.memory);
 
-	copyBuffer(&uniform->buffer, &uniform->stagingBuffer, size);
+	copyBuffer(uniform->localBuffer, uniform->stagingBuffer, size);
 }
 
 void VulkanImpl::_allocateCommandBuffers()
@@ -470,7 +467,7 @@ void VulkanImpl::_createDescriptorSets()
 
 	{
 		VkDescriptorBufferInfo buff = {};
-		buff.buffer = _uniforms["camera"]->buffer;
+		buff.buffer = _uniforms["camera"]->localBuffer.buffer;
 		buff.offset = 0;
 		buff.range = sizeof(glm::mat4);
 
@@ -488,7 +485,7 @@ void VulkanImpl::_createDescriptorSets()
 
 	{
 		VkDescriptorBufferInfo buff = {};
-		buff.buffer = _uniforms["model"]->buffer;
+		buff.buffer = _uniforms["model"]->localBuffer.buffer;
 		buff.offset = 0;
 		buff.range = sizeof(glm::mat4);
 
@@ -751,10 +748,10 @@ void VulkanImpl::_createUniforms()
 	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	info.size = size;
 
-	createAndBindBuffer(info, &mvpUniform->stagingBuffer, &mvpUniform->stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	createAndBindBuffer(info, mvpUniform->stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 	info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	createAndBindBuffer(info, &mvpUniform->buffer, &mvpUniform->memory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	createAndBindBuffer(info, mvpUniform->localBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	updateUniform("model", (void*)&model, sizeof(model));
 
@@ -771,10 +768,10 @@ void VulkanImpl::_createUniforms()
 	info.size = size;
 	info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-	createAndBindBuffer(info, &cameraUniform->stagingBuffer, &cameraUniform->stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	createAndBindBuffer(info, cameraUniform->stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 	info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	createAndBindBuffer(info, &cameraUniform->buffer, &cameraUniform->memory, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	createAndBindBuffer(info, cameraUniform->localBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	updateUniform("camera", (void*)&projView, sizeof(projView));
 }

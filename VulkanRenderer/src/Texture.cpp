@@ -33,14 +33,13 @@ void Texture::_load(VulkanImpl* renderer)
 	buff.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	buff.size = size;
 
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingMemory;
-	renderer->createAndBindBuffer(buff, &stagingBuffer, &stagingMemory, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	Buffer staging;
+	renderer->createAndBindBuffer(buff, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 	void* dst;
-	vkMapMemory(VulkanImpl::device(), stagingMemory, 0, size, 0, &dst);
+	vkMapMemory(VulkanImpl::device(), staging.memory, 0, size, 0, &dst);
 	memcpy(dst, (void*)tex, size);
-	vkUnmapMemory(VulkanImpl::device(), stagingMemory);
+	vkUnmapMemory(VulkanImpl::device(), staging.memory);
 
 	VkImageCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -87,13 +86,10 @@ void Texture::_load(VulkanImpl* renderer)
 	copy.imageSubresource.mipLevel = 0;
 
 	VkCommandBuffer cmd = renderer->startOneShotCmdBuffer();
-	vkCmdCopyBufferToImage(cmd, stagingBuffer, _image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+	vkCmdCopyBufferToImage(cmd, staging.buffer, _image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 	renderer->submitOneShotCmdBuffer(cmd);
 
 	renderer->setImageLayout(_image, info.format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, range);
-
-	vkDestroyBuffer(VulkanImpl::device(), stagingBuffer, nullptr);
-	vkFreeMemory(VulkanImpl::device(), stagingMemory, nullptr);
 
 	stbi_image_free(tex);
 

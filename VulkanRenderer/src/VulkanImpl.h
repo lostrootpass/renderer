@@ -8,9 +8,18 @@
 #include <unordered_map>
 
 #include "Window.h"
-#include "Model.h"
+#include "Buffer.h"
 
-struct Uniform;
+class Model;
+
+struct Uniform
+{
+	//Local to the device, not CPU-mappable
+	Buffer localBuffer;
+
+	//CPU-mappable buffer
+	Buffer stagingBuffer;
+};
 
 typedef class VulkanImpl
 {
@@ -26,9 +35,9 @@ public:
 	VulkanImpl();
 	~VulkanImpl();
 
-	void copyBuffer(VkBuffer* dst, VkBuffer* src, VkDeviceSize size) const;
+	void copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size) const;
 
-	void createAndBindBuffer(const VkBufferCreateInfo& info, VkBuffer* buffer, VkDeviceMemory* memory, VkMemoryPropertyFlags flags) const;
+	void createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buffer, VkMemoryPropertyFlags flags) const;
 
 	uint32_t getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const;
 
@@ -136,24 +145,5 @@ private:
 	void _queryDeviceQueueFamilies(VkPhysicalDevice device);
 	void _registerDebugger();
 } Renderer;
-
-struct Uniform
-{
-	VkDeviceMemory memory;
-	VkBuffer buffer;
-
-	VkDeviceMemory stagingMemory;
-	VkBuffer stagingBuffer;
-
-	~Uniform()
-	{
-		vkDestroyBuffer(VulkanImpl::device(), stagingBuffer, nullptr);
-		vkFreeMemory(VulkanImpl::device(), stagingMemory, nullptr);
-
-		vkDestroyBuffer(VulkanImpl::device(), buffer, nullptr);
-		vkFreeMemory(VulkanImpl::device(), memory, nullptr);
-	}
-};
-
 
 #endif //VULKAN_IMPL_H_

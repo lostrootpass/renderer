@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Texture.h"
+#include "Buffer.h"
 
 class VulkanImpl;
 
@@ -45,10 +46,9 @@ private:
 	glm::vec3 _position;
 
 	VkPipeline _pipeline;
-	VkBuffer _vertexBuffer;
-	VkDeviceMemory _vtxMemory;
-	VkBuffer _indexBuffer;
-	VkDeviceMemory _idxMemory;
+	
+	Buffer _vertexBuffer;
+	Buffer _indexBuffer;
 
 	Texture* _texture;
 
