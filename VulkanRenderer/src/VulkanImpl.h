@@ -11,6 +11,8 @@
 #include "Buffer.h"
 
 class Model;
+class Scene;
+class SwapChain;
 
 struct Uniform
 {
@@ -19,6 +21,8 @@ struct Uniform
 
 	//CPU-mappable buffer
 	Buffer stagingBuffer;
+
+	VkDeviceSize size;
 };
 
 typedef class VulkanImpl
@@ -39,11 +43,15 @@ public:
 
 	void createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buffer, VkMemoryPropertyFlags flags) const;
 
+	Uniform* createUniform(const std::string& name, size_t size);
+
 	uint32_t getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const;
 
 	const VkPipeline getPipelineForShader(const std::string& shaderName);
 
 	void init(const Window& window);
+
+	void recordCommandBuffers(const Scene* scene = 0);
 
 	void render();
 
@@ -52,6 +60,8 @@ public:
 	VkCommandBuffer startOneShotCmdBuffer() const;
 
 	void submitOneShotCmdBuffer(VkCommandBuffer buffer) const;
+
+	void updateSampledImage(VkImageView view) const;
 
 	void updateUniform(const std::string& name, void* data, size_t size);
 
@@ -66,6 +76,11 @@ public:
 	inline static const VkDevice device()
 	{
 		return _device;
+	}
+
+	inline VkExtent2D extent() const
+	{
+		return _extent;
 	}
 
 	inline const VkQueue graphicsQueue() const
@@ -106,7 +121,6 @@ private:
 	};
 
 	std::vector<VkCommandBuffer> _commandBuffers;
-	std::vector<Model*> _models;
 	std::vector<VkDescriptorSetLayout> _descriptorLayouts;
 	std::vector<VkDescriptorSet> _descriptorSets;
 	std::unordered_map<std::string, VkPipeline> _pipelines;
@@ -122,12 +136,12 @@ private:
 	VkSampler _sampler;
 	VkCommandPool _commandPool;
 	VkDescriptorPool _descriptorPool;
+	VkExtent2D _extent;
 
 	QueueInfo _graphicsQueue;
 	QueueInfo _presentQueue;
 
-	class SwapChain* _swapChain;
-	struct Camera* _camera;
+	SwapChain* _swapChain;
 
 	void _allocateCommandBuffers();
 	void _cleanup();
@@ -138,9 +152,7 @@ private:
 	void _createRenderPass();
 	void _createSampler();
 	void _createSwapChain();
-	void _createUniforms();
 	void _initDevice();
-	void _loadTestModel();
 	VkPhysicalDevice _pickPhysicalDevice();
 	void _queryDeviceQueueFamilies(VkPhysicalDevice device);
 	void _registerDebugger();

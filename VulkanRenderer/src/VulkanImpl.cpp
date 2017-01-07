@@ -4,6 +4,7 @@
 #include "ShaderCache.h"
 #include "Model.h"
 #include "Camera.h"
+#include "Scene.h"
 
 #include <set>
 
@@ -17,7 +18,9 @@ VkPhysicalDevice VulkanImpl::_physicalDevice = VK_NULL_HANDLE;
 typedef enum SetBindings
 {
 	SET_BINDING_CAMERA,
-	SET_BINDING_MODEL
+	SET_BINDING_MODEL,
+	SET_BINDING_SAMPLER,
+	SET_BINDING_COUNT //Always have this be last.
 } SetBindings;
 
 VulkanImpl::VulkanImpl() : _swapChain(nullptr)
@@ -57,6 +60,33 @@ void VulkanImpl::createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buf
 	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &buffer.memory);
 
 	vkBindBufferMemory(VulkanImpl::device(), buffer.buffer, buffer.memory, 0);
+}
+
+Uniform* VulkanImpl::createUniform(const std::string& name, size_t size)
+{
+	if (_uniforms.find(name) != _uniforms.end())
+	{
+		//TODO: delete uniform then continue to recreate it?
+		return _uniforms[name];
+	}
+
+	Uniform* uniform = new Uniform;
+	_uniforms[name] = uniform;
+	
+	uniform->size = size;
+
+	VkBufferCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	info.size = size;
+
+	createAndBindBuffer(info, uniform->stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	createAndBindBuffer(info, uniform->localBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	return uniform;
 }
 
 uint32_t VulkanImpl::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const
@@ -207,12 +237,52 @@ void VulkanImpl::init(const Window& window)
 	_createRenderPass();
 	_createSwapChain();
 	_createLayouts();
-	_createUniforms();
 	_createSampler();
-	_loadTestModel();
 	_createDescriptorSets();
-
 	_allocateCommandBuffers();
+}
+
+void VulkanImpl::recordCommandBuffers(const Scene* scene)
+{
+	const std::vector<VkFramebuffer> framebuffers = _swapChain->framebuffers();
+
+	VkClearValue clearValues[] = {
+		{ 0.0f, 0.0f, 0.0f, 1.0f }, //Clear color
+		{ 1.0f, 0.0f } //Depth stencil
+	};
+
+	for (size_t i = 0; i < _commandBuffers.size(); i++)
+	{
+		VkCommandBuffer buffer = _commandBuffers[i];
+
+		VkCommandBufferBeginInfo beginInfo = {};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+
+		VkRenderPassBeginInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		info.clearValueCount = 2;
+		info.pClearValues = clearValues;
+		info.renderPass = _renderPass;
+		info.renderArea.offset = { 0, 0 };
+		info.renderArea.extent = _swapChain->surfaceCapabilities().currentExtent;
+		info.framebuffer = framebuffers[i];
+
+		vkBeginCommandBuffer(buffer, &beginInfo);
+
+		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+
+		//vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, SET_BINDING_COUNT, _descriptorSets.data(), 0, nullptr);
+
+		if(scene)
+			scene->draw(buffer);
+
+		vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, SET_BINDING_COUNT, _descriptorSets.data(), 0, nullptr);
+
+		vkCmdEndRenderPass(buffer);
+
+		vkEndCommandBuffer(buffer);
+	}
 }
 
 void VulkanImpl::render()
@@ -291,6 +361,23 @@ void VulkanImpl::submitOneShotCmdBuffer(VkCommandBuffer buffer) const
 	vkFreeCommandBuffers(_device, _commandPool, 1, &buffer);
 }
 
+void VulkanImpl::updateSampledImage(VkImageView view) const
+{
+	VkDescriptorImageInfo info = {};
+	info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	info.imageView = view;
+
+	VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+	write.descriptorCount = 1;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	write.dstSet = _descriptorSets[SET_BINDING_MODEL];
+	write.dstBinding = 1;
+	write.dstArrayElement = 0;
+	write.pImageInfo = &info;
+
+	vkUpdateDescriptorSets(_device, 1, &write, 0, nullptr);
+}
+
 void VulkanImpl::updateUniform(const std::string& name, void* data, size_t size)
 {
 	if (_uniforms.find(name) == _uniforms.end())
@@ -322,57 +409,12 @@ void VulkanImpl::_allocateCommandBuffers()
 		//
 	}
 
-	VkClearValue clearValues[] = {
-		{ 0.0f, 0.0f, 0.0f, 1.0f }, //Clear color
-		{ 1.0f, 0.0f } //Depth stencil
-	};
-
-	for (size_t i = 0; i < _commandBuffers.size(); i++)
-	{
-		VkCommandBuffer buffer = _commandBuffers[i];
-
-		VkCommandBufferBeginInfo beginInfo = {};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-
-		VkRenderPassBeginInfo info = {};
-		info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		info.clearValueCount = 2;
-		info.pClearValues = clearValues;
-		info.renderPass = _renderPass;
-		info.renderArea.offset = { 0, 0 };
-		info.renderArea.extent = _swapChain->surfaceCapabilities().currentExtent;
-		info.framebuffer = framebuffers[i];
-
-		vkBeginCommandBuffer(buffer, &beginInfo);
-
-		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
-
-		vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 2, _descriptorSets.data(), 0, nullptr);
-		
-		for (Model* model : _models)
-		{
-			model->draw(this, buffer);
-		}
-
-		vkCmdEndRenderPass(buffer);
-
-		vkEndCommandBuffer(buffer);
-	}
+	recordCommandBuffers();
 }
 
 void VulkanImpl::_cleanup()
 {
-	delete _camera;
-
 	vkDeviceWaitIdle(_device);
-
-	for (Model* model : _models)
-	{
-		delete model;
-	}
-
-	_models.clear();
 
 	for (auto pair : _uniforms)
 	{
@@ -424,6 +466,7 @@ void VulkanImpl::_createCommandPool()
 {
 	VkCommandPoolCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	info.queueFamilyIndex = _graphicsQueue.index;
 
 	if (vkCreateCommandPool(_device, &info, nullptr, &_commandPool) != VK_SUCCESS)
@@ -434,18 +477,21 @@ void VulkanImpl::_createCommandPool()
 
 void VulkanImpl::_createDescriptorSets()
 {
-	VkDescriptorPoolSize sizes[2] = {};
+	VkDescriptorPoolSize sizes[SET_BINDING_COUNT] = {};
 	sizes[0].descriptorCount = 2;
 	sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 
 	sizes[1].descriptorCount = 1;
-	sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	sizes[1].type = VK_DESCRIPTOR_TYPE_SAMPLER;
+
+	sizes[2].descriptorCount = 1;
+	sizes[2].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 
 	VkDescriptorPoolCreateInfo pool = {};
 	pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	pool.poolSizeCount = 2;
+	pool.poolSizeCount = SET_BINDING_COUNT;
 	pool.pPoolSizes = sizes;
-	pool.maxSets = 2;
+	pool.maxSets = SET_BINDING_COUNT;
 
 	if (vkCreateDescriptorPool(_device, &pool, nullptr, &_descriptorPool) != VK_SUCCESS)
 	{
@@ -458,7 +504,7 @@ void VulkanImpl::_createDescriptorSets()
 	alloc.pSetLayouts = _descriptorLayouts.data();
 	alloc.descriptorSetCount = (uint32_t)_descriptorLayouts.size();
 
-	_descriptorSets.resize(2);
+	_descriptorSets.resize(SET_BINDING_COUNT);
 	
 	if (vkAllocateDescriptorSets(_device, &alloc, _descriptorSets.data()) != VK_SUCCESS)
 	{
@@ -467,9 +513,10 @@ void VulkanImpl::_createDescriptorSets()
 
 	{
 		VkDescriptorBufferInfo buff = {};
-		buff.buffer = _uniforms["camera"]->localBuffer.buffer;
+		Uniform* uniform = createUniform("camera", sizeof(glm::mat4));
+		buff.buffer = uniform->localBuffer.buffer;
 		buff.offset = 0;
-		buff.range = sizeof(glm::mat4);
+		buff.range = uniform->size;
 
 		VkWriteDescriptorSet writes[1] = {};
 		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -484,15 +531,12 @@ void VulkanImpl::_createDescriptorSets()
 	}
 
 	{
-		VkDescriptorBufferInfo buff = {};
-		buff.buffer = _uniforms["model"]->localBuffer.buffer;
-		buff.offset = 0;
-		buff.range = sizeof(glm::mat4);
 
-		VkDescriptorImageInfo img = {};
-		img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		img.sampler = _sampler;
-		img.imageView = _models[0]->texView();
+		VkDescriptorBufferInfo buff = {};
+		Uniform* uniform = createUniform("model", sizeof(glm::mat4));
+		buff.buffer = uniform->localBuffer.buffer;
+		buff.offset = 0;
+		buff.range = uniform->size;
 
 		VkWriteDescriptorSet writes[2] = {};
 		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -503,15 +547,24 @@ void VulkanImpl::_createDescriptorSets()
 		writes[0].dstArrayElement = 0;
 		writes[0].pBufferInfo = &buff;
 
-		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[1].descriptorCount = 1;
-		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		writes[1].dstSet = _descriptorSets[SET_BINDING_MODEL];
-		writes[1].dstBinding = 1;
-		writes[1].dstArrayElement = 0;
-		writes[1].pImageInfo = &img;
+		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
+	}
 
-		vkUpdateDescriptorSets(_device, 2, writes, 0, nullptr);
+	{
+		VkDescriptorImageInfo img = {};
+		img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		img.sampler = _sampler;
+
+		VkWriteDescriptorSet writes[1] = {};
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].descriptorCount = 1;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+		writes[0].dstSet = _descriptorSets[SET_BINDING_SAMPLER];
+		writes[0].dstBinding = 0;
+		writes[0].dstArrayElement = 0;
+		writes[0].pImageInfo = &img;
+
+		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
 	}
 }
 
@@ -565,7 +618,7 @@ void VulkanImpl::_createLayouts()
 
 	bindings[1].binding = 1;
 	bindings[1].descriptorCount = 1;
-	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	VkDescriptorSetLayoutCreateInfo info = {};
@@ -573,7 +626,7 @@ void VulkanImpl::_createLayouts()
 	info.bindingCount = 1;
 	info.pBindings = bindings;
 
-	VkDescriptorSetLayout layouts[2];
+	VkDescriptorSetLayout layouts[SET_BINDING_COUNT];
 
 	if (vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[0]) != VK_SUCCESS)
 	{
@@ -583,8 +636,15 @@ void VulkanImpl::_createLayouts()
 	info.bindingCount = 2;
 	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[1]);
 
+	info.bindingCount = 1;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindings[0].descriptorCount = 1;
+	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[2]);
+
 	_descriptorLayouts.push_back(layouts[0]);
 	_descriptorLayouts.push_back(layouts[1]);
+	_descriptorLayouts.push_back(layouts[2]);
 
 	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -731,49 +791,7 @@ void VulkanImpl::_createSwapChain()
 	}
 
 	_swapChain->init(info);
-}
-
-void VulkanImpl::_createUniforms()
-{
-	Uniform* mvpUniform = new Uniform;
-	_uniforms["model"] = mvpUniform;
-
-	glm::mat4 model = glm::translate(glm::mat4(), glm::vec3(0.0f, 0.0f, 0.0f));
-
-	VkDeviceSize size = sizeof(model);
-
-	VkBufferCreateInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	info.size = size;
-
-	createAndBindBuffer(info, mvpUniform->stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	createAndBindBuffer(info, mvpUniform->localBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-	updateUniform("model", (void*)&model, sizeof(model));
-
-	//
-
-	Uniform* cameraUniform = new Uniform;
-	_uniforms["camera"] = cameraUniform;
-
-	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
-	_camera = new Camera(extent.width, extent.height);
-	glm::mat4 projView = _camera->projectionViewMatrix();
-
-	size = sizeof(projView);
-	info.size = size;
-	info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-
-	createAndBindBuffer(info, cameraUniform->stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	createAndBindBuffer(info, cameraUniform->localBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-	updateUniform("camera", (void*)&projView, sizeof(projView));
+	_extent = _swapChain->surfaceCapabilities().currentExtent;
 }
 
 void VulkanImpl::_initDevice()
@@ -827,12 +845,6 @@ void VulkanImpl::_initDevice()
 
 	vkGetDeviceQueue(_device, _graphicsQueue.index, 0, &_graphicsQueue.vkQueue);
 	vkGetDeviceQueue(_device, _presentQueue.index, 0, &_presentQueue.vkQueue);
-}
-
-void VulkanImpl::_loadTestModel()
-{
-	Model* model = new Model("cube", this);
-	_models.push_back(model);
 }
 
 VkPhysicalDevice VulkanImpl::_pickPhysicalDevice()

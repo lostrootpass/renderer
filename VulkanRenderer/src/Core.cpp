@@ -1,5 +1,6 @@
 #include "Core.h"
 #include "Window.h"
+#include "Scene.h"
 
 #include <iostream>
 
@@ -36,6 +37,11 @@ void Core::_init()
 
 	_renderer = new Renderer();
 	_renderer->init(*_window);
+
+	_scene = new Scene(*_renderer);
+
+	//Test model:
+	_scene->addModel("cube");
 }
 
 void Core::_pollEvents()
@@ -55,6 +61,12 @@ void Core::_pollEvents()
 void Core::_shutdown()
 {
 	_running = false;
+
+	if (_scene)
+	{
+		delete _scene;
+		_scene = nullptr;
+	}
 
 	if (_renderer)
 	{

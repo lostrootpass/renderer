@@ -4,6 +4,8 @@
 #include "Window.h"
 #include "VulkanImpl.h"
 
+class Scene;
+
 class Core
 {
 public:
@@ -15,6 +17,7 @@ public:
 private:
 	Renderer* _renderer;
 	Window* _window;
+	Scene* _scene;
 
 	bool _running;
 
