@@ -3,8 +3,11 @@
 #include "Scene.h"
 
 #include <iostream>
+#include <chrono>
 
 #include <SDL.h>
+
+typedef std::chrono::high_resolution_clock Clock;
 
 Core::Core() : _running(true), _window(nullptr), _renderer(nullptr)
 {
@@ -20,8 +23,15 @@ void Core::run()
 {
 	_init();
 
+	std::chrono::time_point<std::chrono::steady_clock> now = Clock::now();
+	std::chrono::duration<float> dtime;
+
 	while (_running) {
+		dtime = Clock::now() - now;
+		now = Clock::now();
+
 		_pollEvents();
+		_scene->update(dtime.count());
 		_renderer->render();
 	}
 

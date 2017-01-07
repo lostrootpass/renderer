@@ -17,6 +17,8 @@ public:
 
 	void draw(VkCommandBuffer cmd) const;
 
+	void update(float dtime);
+
 private:
 	std::vector<Model*> _models;
 

@@ -38,6 +38,14 @@ void Scene::draw(VkCommandBuffer cmd) const
 	}
 }
 
+void Scene::update(float dtime)
+{
+	for (Model* model : _models)
+	{
+		model->update(_renderer, dtime);
+	}
+}
+
 void Scene::_init()
 {
 	VkExtent2D extent = _renderer->extent();

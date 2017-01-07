@@ -30,6 +30,15 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 	vkCmdDrawIndexed(cmd, (uint32_t)_indices.size(), 1, 0, 0, 0);
 }
 
+void Model::update(VulkanImpl* renderer, float dtime)
+{
+	static float time = 0;
+	time += dtime;
+	glm::mat4 model = glm::translate(glm::mat4(), _position);
+	model = glm::rotate(model, time, glm::vec3(0.0f, 0.0f, 1.0f));
+	renderer->updateUniform("model", (void*)&model, sizeof(model));
+}
+
 void Model::_load(VulkanImpl* renderer)
 {
 	_loadModel(renderer);

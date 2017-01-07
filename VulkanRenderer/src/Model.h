@@ -27,6 +27,8 @@ public:
 
 	void draw(VulkanImpl* renderer, VkCommandBuffer cmd);
 
+	void update(VulkanImpl*, float dtime);
+
 	const std::string& name() const
 	{
 		return _name;
