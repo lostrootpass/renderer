@@ -49,11 +49,7 @@ void Model::_load(VulkanImpl* renderer)
 
 		Buffer staging;
 		renderer->createAndBindBuffer(info, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-		void* dst;
-		vkMapMemory(VulkanImpl::device(), staging.memory, 0, size, 0, &dst);
-		memcpy(dst, (void*)_vertices.data(), size);
-		vkUnmapMemory(VulkanImpl::device(), staging.memory);
+		staging.copyData((void*)_vertices.data(), size);
 
 		info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 		renderer->createAndBindBuffer(info, _vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -72,11 +68,7 @@ void Model::_load(VulkanImpl* renderer)
 
 		Buffer staging;
 		renderer->createAndBindBuffer(info, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-		void* dst;
-		vkMapMemory(VulkanImpl::device(), staging.memory, 0, size, 0, &dst);
-		memcpy(dst, (void*)_indices.data(), size);
-		vkUnmapMemory(VulkanImpl::device(), staging.memory);
+		staging.copyData((void*)_indices.data(), size);
 
 		info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 		renderer->createAndBindBuffer(info, _indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);

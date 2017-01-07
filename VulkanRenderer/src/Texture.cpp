@@ -35,11 +35,7 @@ void Texture::_load(VulkanImpl* renderer)
 
 	Buffer staging;
 	renderer->createAndBindBuffer(buff, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	void* dst;
-	vkMapMemory(VulkanImpl::device(), staging.memory, 0, size, 0, &dst);
-	memcpy(dst, (void*)tex, size);
-	vkUnmapMemory(VulkanImpl::device(), staging.memory);
+	staging.copyData((void*)tex, size);
 
 	VkImageCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;

@@ -384,12 +384,7 @@ void VulkanImpl::updateUniform(const std::string& name, void* data, size_t size)
 		return;
 
 	Uniform* uniform = _uniforms[name];
-
-	void* dst;
-	vkMapMemory(_device, uniform->stagingBuffer.memory, 0, size, 0, &dst);
-	memcpy(dst, data, size);
-	vkUnmapMemory(_device, uniform->stagingBuffer.memory);
-
+	uniform->stagingBuffer.copyData(data, size);
 	copyBuffer(uniform->localBuffer, uniform->stagingBuffer, size);
 }
 

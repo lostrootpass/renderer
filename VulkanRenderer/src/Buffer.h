@@ -9,6 +9,8 @@ struct Buffer
 	VkDeviceMemory memory;
 
 	~Buffer();
+
+	void copyData(void* data, size_t size) const;
 };
 
 #endif //BUFFER_H_
