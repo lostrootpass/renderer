@@ -49,9 +49,6 @@ void Core::_init()
 	_renderer->init(*_window);
 
 	_scene = new Scene(*_renderer);
-
-	//Test model:
-	_scene->addModel("cube");
 }
 
 void Core::_pollEvents()

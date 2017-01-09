@@ -13,6 +13,11 @@ public:
 
 	~Texture();
 
+	inline const VkDescriptorSet& set() const
+	{
+		return _set;
+	}
+
 	inline const VkImageView view() const
 	{
 		return _view;
@@ -24,6 +29,7 @@ private:
 	VkImage _image;
 	VkImageView _view;
 	VkDeviceMemory _memory;
+	VkDescriptorSet _set;
 
 	void _load(VulkanImpl* renderer);
 };

@@ -10,7 +10,7 @@ struct Buffer
 
 	~Buffer();
 
-	void copyData(void* data, size_t size) const;
+	void copyData(void* data, size_t size, size_t offset = 0) const;
 };
 
 #endif //BUFFER_H_

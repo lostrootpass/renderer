@@ -99,4 +99,24 @@ void Texture::_load(VulkanImpl* renderer)
 	view.subresourceRange = range;
 
 	vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_view);
+
+	//
+
+	{
+		renderer->allocateTextureDescriptor(_set);
+
+		VkDescriptorImageInfo info;
+		info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		info.imageView = _view;
+
+		VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+		write.descriptorCount = 1;
+		write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		write.dstSet = _set;
+		write.dstBinding = 0;
+		write.dstArrayElement = 0;
+		write.pImageInfo = &info;
+
+		vkUpdateDescriptorSets(VulkanImpl::device(), 1, &write, 0, nullptr);
+	}
 }

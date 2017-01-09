@@ -14,6 +14,15 @@ class Model;
 class Scene;
 class SwapChain;
 
+typedef enum SetBinding
+{
+	SET_BINDING_CAMERA,
+	SET_BINDING_MODEL,
+	SET_BINDING_SAMPLER,
+	SET_BINDING_TEXTURE,
+	SET_BINDING_COUNT //Always have this be last.
+} SetBinding;
+
 struct Uniform
 {
 	//Local to the device, not CPU-mappable
@@ -22,7 +31,12 @@ struct Uniform
 	//CPU-mappable buffer
 	Buffer stagingBuffer;
 
+	//Total size of the entire buffer
 	VkDeviceSize size;
+
+	//For dynamic buffers, the range of an individual binding.
+	//For static buffers, this is the same as Uniform::size
+	VkDeviceSize range;
 };
 
 typedef class VulkanImpl
@@ -39,11 +53,19 @@ public:
 	VulkanImpl();
 	~VulkanImpl();
 
-	void copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size) const;
+	void allocateTextureDescriptor(VkDescriptorSet& set);
+
+	void bindDescriptorSet(VkCommandBuffer cmd, SetBinding index, const VkDescriptorSet& set) const;
+
+	void bindDescriptorSetById(VkCommandBuffer cmd, SetBinding set, std::vector<uint32_t>* offsets = nullptr) const;
+
+	void copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset = 0) const;
 
 	void createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buffer, VkMemoryPropertyFlags flags) const;
 
-	Uniform* createUniform(const std::string& name, size_t size);
+	Uniform* createUniform(const std::string& name, size_t size, size_t range = 0);
+
+	size_t getAlignedRange(size_t needed) const;
 
 	uint32_t getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const;
 
@@ -63,7 +85,7 @@ public:
 
 	void updateSampledImage(VkImageView view) const;
 
-	void updateUniform(const std::string& name, void* data, size_t size);
+	void updateUniform(const std::string& name, void* data, size_t size, size_t offset = 0);
 
 	inline const VkCommandBuffer commandBuffer(size_t idx) const
 	{
@@ -81,6 +103,11 @@ public:
 	inline VkExtent2D extent() const
 	{
 		return _extent;
+	}
+
+	inline VkDescriptorSet getDescriptorSet(SetBinding set) const
+	{
+		return _descriptorSets[set];
 	}
 
 	inline const VkQueue graphicsQueue() const
@@ -137,6 +164,7 @@ private:
 	VkCommandPool _commandPool;
 	VkDescriptorPool _descriptorPool;
 	VkExtent2D _extent;
+	VkPhysicalDeviceProperties _physicalProperties;
 
 	QueueInfo _graphicsQueue;
 	QueueInfo _presentQueue;

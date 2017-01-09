@@ -29,14 +29,14 @@ public:
 
 	void update(VulkanImpl*, float dtime);
 
-	const std::string& name() const
+	inline const std::string& name() const
 	{
 		return _name;
 	}
 
-	const VkImageView texView() const
+	inline void setPosition(glm::vec3 pos)
 	{
-		return _texture->view();
+		_position = pos;
 	}
 
 private:
@@ -53,6 +53,8 @@ private:
 	Buffer _indexBuffer;
 
 	Texture* _texture;
+
+	uint32_t _index;
 
 	void _load(VulkanImpl* renderer);
 	void _loadTexture(const std::string& path, VulkanImpl* renderer);

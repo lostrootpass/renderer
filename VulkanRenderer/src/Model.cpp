@@ -6,9 +6,13 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+static uint32_t MODEL_INDEX = 0;
+
 Model::Model(const std::string& name, VulkanImpl* renderer) : _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f))
 {
 	_load(renderer);
+	_index = MODEL_INDEX;
+	MODEL_INDEX++;
 }
 
 Model::~Model()
@@ -18,12 +22,18 @@ Model::~Model()
 
 void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 {
-	glm::mat4 model = glm::translate(glm::mat4(), _position);
-	renderer->updateUniform("model", (void*)&model, sizeof(model));
-	renderer->updateSampledImage(_texture->view());
+	renderer->bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
+	
+	std::vector<uint32_t> descOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(glm::mat4))*_index};
+	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
+
+	if(_texture->view())
+		renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, _texture->set());
 	
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 
+	//TODO: copy whatever is in the Staging Buffer to GPU local memory
+	
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(cmd, 0, 1, &_vertexBuffer.buffer, offsets);
 	vkCmdBindIndexBuffer(cmd, _indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -36,7 +46,9 @@ void Model::update(VulkanImpl* renderer, float dtime)
 	time += dtime;
 	glm::mat4 model = glm::translate(glm::mat4(), _position);
 	model = glm::rotate(model, time, glm::vec3(0.0f, 0.0f, 1.0f));
-	renderer->updateUniform("model", (void*)&model, sizeof(model));
+
+	//TODO: Don't update the GPU-local memory here, just the staging buffer.
+	renderer->updateUniform("model", (void*)&model, sizeof(model), renderer->getAlignedRange(sizeof(glm::mat4)) * _index);
 }
 
 void Model::_load(VulkanImpl* renderer)
@@ -115,17 +127,20 @@ void Model::_loadModel(VulkanImpl* renderer)
 		{
 			Vertex vtx = {};
 			vtx.color = { 1.0f, 1.0f, 1.0f };
-			
+
 			vtx.position = {
 				attrib.vertices[3 * i.vertex_index] * scale,
 				attrib.vertices[3 * i.vertex_index + 1] * scale,
 				attrib.vertices[3 * i.vertex_index + 2] * scale,
 			};
 
-			vtx.uv = {
-				attrib.texcoords[2 * i.texcoord_index],
-				attrib.texcoords[2 * i.texcoord_index + 1]
-			};
+			if (attrib.texcoords.size())
+			{
+				vtx.uv = {
+					attrib.texcoords[2 * i.texcoord_index],
+					attrib.texcoords[2 * i.texcoord_index + 1]
+				};
+			}
 
 			_vertices.push_back(vtx);
 			_indices.push_back((uint32_t)_indices.size());
