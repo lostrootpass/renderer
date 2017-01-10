@@ -25,7 +25,8 @@ void Texture::_load(VulkanImpl* renderer)
 	if (!tex)
 		return;
 
-	VkDeviceSize size = width * height * channels;
+	//Force an alpha channel to be allocated even if we don't need one.
+	VkDeviceSize size = width * height * 4;
 
 	VkBufferCreateInfo buff = {};
 	buff.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -105,7 +106,7 @@ void Texture::_load(VulkanImpl* renderer)
 	{
 		renderer->allocateTextureDescriptor(_set);
 
-		VkDescriptorImageInfo info;
+		VkDescriptorImageInfo info = {};
 		info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		info.imageView = _view;
 

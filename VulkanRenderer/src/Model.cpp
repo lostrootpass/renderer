@@ -45,7 +45,7 @@ void Model::update(VulkanImpl* renderer, float dtime)
 	static float time = 0;
 	time += dtime;
 	glm::mat4 model = glm::translate(glm::mat4(), _position);
-	model = glm::rotate(model, time, glm::vec3(0.0f, 0.0f, 1.0f));
+	//model = glm::rotate(model, time, glm::vec3(0.0f, 0.0f, 1.0f));
 
 	//TODO: Don't update the GPU-local memory here, just the staging buffer.
 	renderer->updateUniform("model", (void*)&model, sizeof(model), renderer->getAlignedRange(sizeof(glm::mat4)) * _index);

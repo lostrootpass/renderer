@@ -9,3 +9,4 @@ Makefile*
 moc_*
 gen/
 *.opendb
+*.blend1
