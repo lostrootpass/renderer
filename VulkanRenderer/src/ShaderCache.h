@@ -6,7 +6,6 @@
 #include <unordered_map>
 #include <fstream>
 
-const std::string ASSET_PATH = "assets/";
 const std::string SHADER_EXT = ".spv";
 
 struct ShaderCache final

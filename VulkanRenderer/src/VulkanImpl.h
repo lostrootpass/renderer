@@ -10,6 +10,8 @@
 #include "Window.h"
 #include "Buffer.h"
 
+const std::string ASSET_PATH = "assets/";
+
 class Model;
 class Scene;
 class SwapChain;

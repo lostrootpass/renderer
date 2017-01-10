@@ -2,6 +2,7 @@
 #include "VulkanImplUtil.h"
 #include "SwapChain.h"
 #include "ShaderCache.h"
+#include "TextureCache.h"
 #include "Model.h"
 #include "Camera.h"
 #include "Scene.h"
@@ -266,6 +267,7 @@ void VulkanImpl::init(const Window& window)
 	_initDevice();
 	_createCommandPool();
 	ShaderCache::init();
+	TextureCache::init();
 	_createRenderPass();
 	_createSwapChain();
 	_createLayouts();
@@ -450,6 +452,7 @@ void VulkanImpl::_cleanup()
 
 	vkDestroySampler(_device, _sampler, nullptr);
 	ShaderCache::shutdown();
+	TextureCache::shutdown();
 
 	for (auto pair : _pipelines)
 	{

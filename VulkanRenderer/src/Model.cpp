@@ -1,5 +1,6 @@
 #include "Model.h"
 #include "VulkanImpl.h"
+#include "TextureCache.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -17,7 +18,6 @@ Model::Model(const std::string& name, VulkanImpl* renderer) : _name(name), _posi
 
 Model::~Model()
 {
-	delete _texture;
 }
 
 void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
@@ -27,7 +27,7 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 	std::vector<uint32_t> descOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(glm::mat4))*_index};
 	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
 
-	if(_texture->view())
+	if(_texture && _texture->view())
 		renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, _texture->set());
 	
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
@@ -102,7 +102,7 @@ void Model::_load(VulkanImpl* renderer)
 
 void Model::_loadTexture(const std::string& path, VulkanImpl* renderer)
 {
-	_texture = new Texture(path, renderer);
+	_texture = TextureCache::getTexture(path, *renderer);
 }
 
 void Model::_loadModel(VulkanImpl* renderer)
