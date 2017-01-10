@@ -61,7 +61,7 @@ void Texture::_load(VulkanImpl* renderer)
 	VkMemoryAllocateInfo alloc = {};
 	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	alloc.memoryTypeIndex = renderer->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	alloc.allocationSize = size;
+	alloc.allocationSize = memReq.size;
 
 	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_memory);
 	vkBindImageMemory(VulkanImpl::device(), _image, _memory, 0);

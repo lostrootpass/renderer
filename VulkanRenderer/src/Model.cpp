@@ -55,9 +55,11 @@ void Model::_load(VulkanImpl* renderer)
 {
 	_loadModel(renderer);
 
-	char shaderName[128] = {'\0'};
-	sprintf_s(shaderName, "models/%s/%s", _name.c_str(), _name.c_str());
-	_pipeline = renderer->getPipelineForShader(shaderName);
+	//TODO: override default shaders if custom shaders are present in the model dir
+	//char shaderName[128] = {'\0'};
+	//sprintf_s(shaderName, "models/%s/%s", _name.c_str(), _name.c_str());
+	//_pipeline = renderer->getPipelineForShader(shaderName);
+	_pipeline = renderer->getPipelineForShader("shaders/common/model");
 
 	//Vertex buffer
 	{

@@ -11,5 +11,6 @@ layout(set = 3, binding = 0) uniform texture2D diffuse;
 
 void main() {
     //fragColor = vec4(color, 1.0);
+    //fragColor = texture(sampler2D(diffuse, texsampler), vec2(uv.x, 1.0 - uv.y));
     fragColor = texture(sampler2D(diffuse, texsampler), uv);
 }
