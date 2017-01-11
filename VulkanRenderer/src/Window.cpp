@@ -35,10 +35,7 @@ void Window::createSurface(const VkInstance vkInstance, VkSurfaceKHR* vkSurface)
 	createInfo.hinstance = GetModuleHandle(NULL);
 	createInfo.hwnd = wmInfo.info.win.window;
 	
-	if (vkCreateWin32SurfaceKHR(vkInstance, &createInfo, nullptr, vkSurface) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateWin32SurfaceKHR(vkInstance, &createInfo, nullptr, vkSurface));
 }
 
 void Window::open()

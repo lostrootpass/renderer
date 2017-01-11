@@ -57,10 +57,7 @@ private:
 		info.pCode = (uint32_t*)code;
 
 		VkShaderModule module;
-		if (vkCreateShaderModule(VulkanImpl::device(), &info, nullptr, &module) != VK_SUCCESS)
-		{
-			//
-		}
+		VkCheck(vkCreateShaderModule(VulkanImpl::device(), &info, nullptr, &module));
 
 		_moduleCache[name] = module;
 		delete[] code;

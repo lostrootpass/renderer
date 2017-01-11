@@ -1,7 +1,6 @@
 #ifndef VULKAN_IMPL_H_
 #define VULKAN_IMPL_H_
 
-#define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
 
 #include <vector>
@@ -9,6 +8,7 @@
 
 #include "Window.h"
 #include "Buffer.h"
+#include "VulkanUtil.h"
 
 const std::string ASSET_PATH = "assets/";
 
@@ -45,14 +45,6 @@ struct Uniform
 typedef class VulkanImpl
 {
 public:
-	struct Util;
-
-#ifndef NDEBUG
-	static const bool DEBUGENABLE = true;
-#else
-	static const bool DEBUGENABLE = false;
-#endif
-
 	VulkanImpl();
 	~VulkanImpl();
 

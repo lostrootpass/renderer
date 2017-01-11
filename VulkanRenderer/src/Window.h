@@ -1,10 +1,6 @@
 #ifndef WINDOW_H_
 #define WINDOW_H_
 
-//#define GLFW_INCLUDE_VULKAN
-//#include <GLFW/glfw3.h>
-
-#define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
 #include <SDL_video.h>
 
@@ -22,7 +18,6 @@ public:
 
 private:
 	Core* _core;
-	//GLFWwindow* _glfwWindow;
 	SDL_Window* _sdlWindow;
 };
 

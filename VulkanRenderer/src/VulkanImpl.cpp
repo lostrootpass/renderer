@@ -1,5 +1,4 @@
 #include "VulkanImpl.h"
-#include "VulkanImplUtil.h"
 #include "SwapChain.h"
 #include "ShaderCache.h"
 #include "TextureCache.h"
@@ -36,7 +35,7 @@ void VulkanImpl::allocateTextureDescriptor(VkDescriptorSet& set)
 	alloc.descriptorSetCount = 1;
 	alloc.descriptorPool = _descriptorPool;
 	alloc.pSetLayouts = &_descriptorLayouts[3];
-	vkAllocateDescriptorSets(VulkanImpl::device(), &alloc, &set);
+	VkCheck(vkAllocateDescriptorSets(VulkanImpl::device(), &alloc, &set));
 }
 
 void VulkanImpl::bindDescriptorSet(VkCommandBuffer cmd, SetBinding index, const VkDescriptorSet& set) const
@@ -72,7 +71,7 @@ void VulkanImpl::createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buf
 {
 	VkMemoryRequirements memReq;
 
-	vkCreateBuffer(_device, &info, nullptr, &buffer.buffer);
+	VkCheck(vkCreateBuffer(_device, &info, nullptr, &buffer.buffer));
 	vkGetBufferMemoryRequirements(VulkanImpl::device(), buffer.buffer, &memReq);
 
 	VkMemoryAllocateInfo alloc = {};
@@ -80,9 +79,8 @@ void VulkanImpl::createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buf
 	alloc.allocationSize = memReq.size;
 	alloc.memoryTypeIndex = getMemoryTypeIndex(memReq.memoryTypeBits, flags);
 
-	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &buffer.memory);
-
-	vkBindBufferMemory(VulkanImpl::device(), buffer.buffer, buffer.memory, 0);
+	VkCheck(vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &buffer.memory));
+	VkCheck(vkBindBufferMemory(VulkanImpl::device(), buffer.buffer, buffer.memory, 0));
 }
 
 Uniform* VulkanImpl::createUniform(const std::string& name, size_t size, size_t range)
@@ -252,10 +250,7 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 	info.pViewportState = &vps;
 	info.pDepthStencilState = &dss;
 
-	if (vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline));
 
 	_pipelines[shaderName] = pipeline;
 	return _pipelines[shaderName];
@@ -308,7 +303,7 @@ void VulkanImpl::recordCommandBuffers(const Scene* scene)
 		info.renderArea.extent = _swapChain->surfaceCapabilities().currentExtent;
 		info.framebuffer = framebuffers[i];
 
-		vkBeginCommandBuffer(buffer, &beginInfo);
+		VkCheck(vkBeginCommandBuffer(buffer, &beginInfo));
 
 		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -317,7 +312,7 @@ void VulkanImpl::recordCommandBuffers(const Scene* scene)
 
 		vkCmdEndRenderPass(buffer);
 
-		vkEndCommandBuffer(buffer);
+		VkCheck(vkEndCommandBuffer(buffer));
 	}
 }
 
@@ -377,22 +372,22 @@ VkCommandBuffer VulkanImpl::startOneShotCmdBuffer() const
 	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-	vkBeginCommandBuffer(buffer, &begin);
+	VkCheck(vkBeginCommandBuffer(buffer, &begin));
 
 	return buffer;
 }
 
 void VulkanImpl::submitOneShotCmdBuffer(VkCommandBuffer buffer) const
 {
-	vkEndCommandBuffer(buffer);
+	VkCheck(vkEndCommandBuffer(buffer));
 
 	VkSubmitInfo submit = {};
 	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submit.commandBufferCount = 1;
 	submit.pCommandBuffers = &buffer;
 
-	vkQueueSubmit(_graphicsQueue.vkQueue, 1, &submit, VK_NULL_HANDLE);
-	vkQueueWaitIdle(_graphicsQueue.vkQueue);
+	VkCheck(vkQueueSubmit(_graphicsQueue.vkQueue, 1, &submit, VK_NULL_HANDLE));
+	VkCheck(vkQueueWaitIdle(_graphicsQueue.vkQueue));
 
 	vkFreeCommandBuffers(_device, _commandPool, 1, &buffer);
 }
@@ -435,17 +430,14 @@ void VulkanImpl::_allocateCommandBuffers()
 	info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	info.commandPool = _commandPool;
 
-	if (vkAllocateCommandBuffers(_device, &info, _commandBuffers.data()) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkAllocateCommandBuffers(_device, &info, _commandBuffers.data()));
 
 	recordCommandBuffers();
 }
 
 void VulkanImpl::_cleanup()
 {
-	vkDeviceWaitIdle(_device);
+	VkCheck(vkDeviceWaitIdle(_device));
 
 	for (auto pair : _uniforms)
 	{
@@ -483,7 +475,7 @@ void VulkanImpl::_cleanup()
 	_device = VK_NULL_HANDLE;
 	vkDestroySurfaceKHR(_instance, _surface, nullptr);
 
-	if (DEBUGENABLE)
+	if (VulkanUtil::DEBUGENABLE)
 	{
 		PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT =
 			(PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(_instance, "vkDestroyDebugReportCallbackEXT");
@@ -501,10 +493,7 @@ void VulkanImpl::_createCommandPool()
 	info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	info.queueFamilyIndex = _graphicsQueue.index;
 
-	if (vkCreateCommandPool(_device, &info, nullptr, &_commandPool) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateCommandPool(_device, &info, nullptr, &_commandPool));
 }
 
 void VulkanImpl::_createDescriptorSets()
@@ -532,10 +521,7 @@ void VulkanImpl::_createDescriptorSets()
 	pool.pPoolSizes = sizes;
 	pool.maxSets = SET_BINDING_COUNT + MAX_TEXTURES;
 
-	if (vkCreateDescriptorPool(_device, &pool, nullptr, &_descriptorPool) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateDescriptorPool(_device, &pool, nullptr, &_descriptorPool));
 
 	VkDescriptorSetAllocateInfo alloc = {};
 	alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -545,10 +531,7 @@ void VulkanImpl::_createDescriptorSets()
 
 	_descriptorSets.resize(SET_BINDING_COUNT);
 	
-	if (vkAllocateDescriptorSets(_device, &alloc, _descriptorSets.data()) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkAllocateDescriptorSets(_device, &alloc, _descriptorSets.data()));
 
 	{
 		VkDescriptorBufferInfo buff = {};
@@ -643,11 +626,11 @@ void VulkanImpl::_createInstance()
 	createInfo.pApplicationInfo = &applicationInfo;
 
 	std::vector<const char*> extensions;
-	Util::getRequiredExtensions(extensions);
+	VulkanUtil::getRequiredExtensions(extensions);
 	createInfo.enabledExtensionCount = (uint32_t)extensions.size();
 	createInfo.ppEnabledExtensionNames = extensions.data();
 
-	if (DEBUGENABLE)
+	if (VulkanUtil::DEBUGENABLE)
 	{
 		const char* validationLayerNames[] = {
 			"VK_LAYER_LUNARG_standard_validation"
@@ -661,10 +644,7 @@ void VulkanImpl::_createInstance()
 		createInfo.enabledLayerCount = 0;
 	}
 	
-	if (vkCreateInstance(&createInfo, nullptr, &_instance) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateInstance(&createInfo, nullptr, &_instance));
 }
 
 void VulkanImpl::_createLayouts()
@@ -682,10 +662,7 @@ void VulkanImpl::_createLayouts()
 
 	VkDescriptorSetLayout layouts[SET_BINDING_COUNT];
 
-	if (vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[0]) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[0]));
 
 	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
@@ -716,10 +693,7 @@ void VulkanImpl::_createLayouts()
 	layoutCreateInfo.pSetLayouts = _descriptorLayouts.data();
 	layoutCreateInfo.setLayoutCount = (uint32_t)_descriptorLayouts.size();
 
-	if (vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout));
 }
 
 void VulkanImpl::_createRenderPass()
@@ -784,10 +758,7 @@ void VulkanImpl::_createRenderPass()
 	info.dependencyCount = 1;
 	info.pDependencies = &dependency;
 
-	if (vkCreateRenderPass(_device, &info, nullptr, &_renderPass) != VK_SUCCESS)
-	{
-		//	
-	}
+	VkCheck(vkCreateRenderPass(_device, &info, nullptr, &_renderPass));
 }
 
 void VulkanImpl::_createSampler()
@@ -817,10 +788,7 @@ void VulkanImpl::_createSampler()
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
 
-	if (vkCreateSampler(_device, &samplerInfo, nullptr, &_sampler) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateSampler(_device, &samplerInfo, nullptr, &_sampler));
 }
 
 void VulkanImpl::_createSwapChain()
@@ -897,16 +865,13 @@ void VulkanImpl::_initDevice()
 	info.queueCreateInfoCount = (uint32_t)queryInfos.size();
 	info.pQueueCreateInfos = queryInfos.data();
 
-	if (DEBUGENABLE)
+	if (VulkanUtil::DEBUGENABLE)
 	{
-		info.enabledLayerCount = (uint32_t)ARRAYSIZE(VK_VALIDATION_LAYERS);
-		info.ppEnabledLayerNames = VK_VALIDATION_LAYERS;
+		info.enabledLayerCount = (uint32_t)VulkanUtil::VALIDATION_LAYERS.size();
+		info.ppEnabledLayerNames = VulkanUtil::VALIDATION_LAYERS.data();
 	}
 
-	if (vkCreateDevice(_physicalDevice, &info, nullptr, &_device) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateDevice(_physicalDevice, &info, nullptr, &_device));
 
 	vkGetDeviceQueue(_device, _graphicsQueue.index, 0, &_graphicsQueue.vkQueue);
 	vkGetDeviceQueue(_device, _presentQueue.index, 0, &_presentQueue.vkQueue);
@@ -915,14 +880,14 @@ void VulkanImpl::_initDevice()
 VkPhysicalDevice VulkanImpl::_pickPhysicalDevice()
 {
 	uint32_t physicalDeviceCount;
-	vkEnumeratePhysicalDevices(_instance, &physicalDeviceCount, nullptr);
+	VkCheck(vkEnumeratePhysicalDevices(_instance, &physicalDeviceCount, nullptr));
 
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 
 	if (physicalDeviceCount > 0)
 	{
 		VkPhysicalDevice* physicalDevices = new VkPhysicalDevice[physicalDeviceCount];
-		vkEnumeratePhysicalDevices(_instance, &physicalDeviceCount, physicalDevices);
+		VkCheck(vkEnumeratePhysicalDevices(_instance, &physicalDeviceCount, physicalDevices));
 		physicalDevice = physicalDevices[0]; //default to any GPU in case it's all we have.
 
 
@@ -963,7 +928,7 @@ void VulkanImpl::_queryDeviceQueueFamilies(VkPhysicalDevice device)
 		}
 
 		VkBool32 presentSupport;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _surface, &presentSupport);
+		VkCheck(vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _surface, &presentSupport));
 
 		if (families[i].queueCount > 0 && presentSupport) {
 			_presentQueue.index = i;
@@ -976,11 +941,11 @@ void VulkanImpl::_queryDeviceQueueFamilies(VkPhysicalDevice device)
 
 void VulkanImpl::_registerDebugger()
 {
-	if (!DEBUGENABLE) return;
+	if (!VulkanUtil::DEBUGENABLE) return;
 
 	VkDebugReportCallbackCreateInfoEXT info = {};
 	info.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-	info.pfnCallback = Util::debugCallback;
+	info.pfnCallback = VulkanUtil::debugCallback;
 	info.pUserData = (void*)this;
 	info.flags = VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_ERROR_BIT_EXT;
 

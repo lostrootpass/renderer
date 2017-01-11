@@ -41,7 +41,7 @@ void SwapChain::init(VkSwapchainCreateInfoKHR& info)
 
 	//Keep existing swap chain around until after the new one is created
 	VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
-	vkCreateSwapchainKHR(_device, &info, nullptr, &newSwapchain);
+	VkCheck(vkCreateSwapchainKHR(_device, &info, nullptr, &newSwapchain));
 
 	if (_vkSwapchain != VK_NULL_HANDLE)
 	{
@@ -59,13 +59,7 @@ void SwapChain::init(VkSwapchainCreateInfoKHR& info)
 void SwapChain::present()
 {
 	uint32_t idx;
-	VkResult res;
-	res = vkAcquireNextImageKHR(_device, _vkSwapchain, std::numeric_limits<uint64_t>::max(), _imageAvailableSemaphore, VK_NULL_HANDLE, &idx);
-
-	if (res != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkAcquireNextImageKHR(_device, _vkSwapchain, std::numeric_limits<uint64_t>::max(), _imageAvailableSemaphore, VK_NULL_HANDLE, &idx));
 
 	VkSemaphore semaphores[] = { _imageAvailableSemaphore };
 	VkSemaphore signals[] = { _renderingFinishedSemaphore };
@@ -83,12 +77,7 @@ void SwapChain::present()
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = buffers;
 
-	res = vkQueueSubmit(_impl->graphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-
-	if (res != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkQueueSubmit(_impl->graphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE));
 
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -98,12 +87,7 @@ void SwapChain::present()
 	presentInfo.pSwapchains = swapChains;
 	presentInfo.pImageIndices = &idx;
 
-	res = vkQueuePresentKHR(_impl->presentQueue(), &presentInfo);
-
-	if (res != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkQueuePresentKHR(_impl->presentQueue(), &presentInfo));
 }
 
 void SwapChain::_createDepthBuffer()
@@ -123,10 +107,7 @@ void SwapChain::_createDepthBuffer()
 	info.format = VK_FORMAT_D32_SFLOAT;
 	info.imageType = VK_IMAGE_TYPE_2D;
 
-	if (vkCreateImage(VulkanImpl::device(), &info, nullptr, &_depthImage) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateImage(VulkanImpl::device(), &info, nullptr, &_depthImage));
 
 	VkMemoryRequirements memReq;
 	vkGetImageMemoryRequirements(VulkanImpl::device(), _depthImage, &memReq);
@@ -135,9 +116,8 @@ void SwapChain::_createDepthBuffer()
 	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	alloc.allocationSize = memReq.size;
 	alloc.memoryTypeIndex = _impl->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_depthMemory);
-
-	vkBindImageMemory(VulkanImpl::device(), _depthImage, _depthMemory, 0);
+	VkCheck(vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_depthMemory));
+	VkCheck(vkBindImageMemory(VulkanImpl::device(), _depthImage, _depthMemory, 0));
 
 	VkImageViewCreateInfo view = {};
 	view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -150,10 +130,7 @@ void SwapChain::_createDepthBuffer()
 	view.subresourceRange.layerCount = 1;
 	view.subresourceRange.levelCount = 1;
 	
-	if (vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_depthView) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_depthView));
 }
 
 void SwapChain::_createFramebuffers()
@@ -177,10 +154,7 @@ void SwapChain::_createFramebuffers()
 		
 
 		VkFramebuffer framebuffer;
-		if (vkCreateFramebuffer(_impl->device(), &info, nullptr, &framebuffer) != VK_SUCCESS)
-		{
-			//
-		}
+		VkCheck(vkCreateFramebuffer(_impl->device(), &info, nullptr, &framebuffer));
 
 		_framebuffers.push_back(framebuffer);
 	}
@@ -189,9 +163,9 @@ void SwapChain::_createFramebuffers()
 void SwapChain::_createImageViews()
 {
 	uint32_t imageCount;
-	vkGetSwapchainImagesKHR(_device, _vkSwapchain, &imageCount, nullptr);
+	VkCheck(vkGetSwapchainImagesKHR(_device, _vkSwapchain, &imageCount, nullptr));
 	_images.resize(imageCount);
-	vkGetSwapchainImagesKHR(_device, _vkSwapchain, &imageCount, _images.data());
+	VkCheck(vkGetSwapchainImagesKHR(_device, _vkSwapchain, &imageCount, _images.data()));
 
 	for (VkImage image : _images)
 	{
@@ -213,10 +187,7 @@ void SwapChain::_createImageViews()
 		info.subresourceRange.layerCount = 1;
 
 		VkImageView view;
-		if (vkCreateImageView(_device, &info, nullptr, &view) != VK_SUCCESS)
-		{
-			//
-		}
+		VkCheck(vkCreateImageView(_device, &info, nullptr, &view));
 
 		_imageViews.push_back(view);
 	}
@@ -227,29 +198,29 @@ void SwapChain::_createSemaphores()
 	VkSemaphoreCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	
-	vkCreateSemaphore(_device, &info, nullptr, &_imageAvailableSemaphore);
-	vkCreateSemaphore(_device, &info, nullptr, &_renderingFinishedSemaphore);
+	VkCheck(vkCreateSemaphore(_device, &info, nullptr, &_imageAvailableSemaphore));
+	VkCheck(vkCreateSemaphore(_device, &info, nullptr, &_renderingFinishedSemaphore));
 }
 
 void SwapChain::_populateSwapChainInfo()
 {
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_impl->physicalDevice(), _impl->surface(), &_swapChainInfo.surfaceCapabilities);
+	VkCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_impl->physicalDevice(), _impl->surface(), &_swapChainInfo.surfaceCapabilities));
 
 	uint32_t formatCount;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(_impl->physicalDevice(), _impl->surface(), &formatCount, nullptr);
+	VkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(_impl->physicalDevice(), _impl->surface(), &formatCount, nullptr));
 
 	if (formatCount > 0)
 	{
 		_swapChainInfo.surfaceFormats.resize(formatCount);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(_impl->physicalDevice(), _impl->surface(), &formatCount, _swapChainInfo.surfaceFormats.data());
+		VkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(_impl->physicalDevice(), _impl->surface(), &formatCount, _swapChainInfo.surfaceFormats.data()));
 	}
 
 	uint32_t presentModeCount;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(_impl->physicalDevice(), _impl->surface(), &presentModeCount, nullptr);
+	VkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(_impl->physicalDevice(), _impl->surface(), &presentModeCount, nullptr));
 
 	if (presentModeCount > 0)
 	{
 		_swapChainInfo.presentModes.resize(presentModeCount);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(_impl->physicalDevice(), _impl->surface(), &presentModeCount, _swapChainInfo.presentModes.data());
+		VkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(_impl->physicalDevice(), _impl->surface(), &presentModeCount, _swapChainInfo.presentModes.data()));
 	}
 }

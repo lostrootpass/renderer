@@ -51,10 +51,7 @@ void Texture::_load(VulkanImpl* renderer)
 	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	info.samples = VK_SAMPLE_COUNT_1_BIT;
 
-	if (vkCreateImage(VulkanImpl::device(), &info, nullptr, &_image) != VK_SUCCESS)
-	{
-		//
-	}
+	VkCheck(vkCreateImage(VulkanImpl::device(), &info, nullptr, &_image));
 
 	VkMemoryRequirements memReq;
 	vkGetImageMemoryRequirements(VulkanImpl::device(), _image, &memReq);
@@ -64,8 +61,8 @@ void Texture::_load(VulkanImpl* renderer)
 	alloc.memoryTypeIndex = renderer->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	alloc.allocationSize = memReq.size;
 
-	vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_memory);
-	vkBindImageMemory(VulkanImpl::device(), _image, _memory, 0);
+	VkCheck(vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_memory));
+	VkCheck(vkBindImageMemory(VulkanImpl::device(), _image, _memory, 0));
 
 	VkImageSubresourceRange range = {};
 	range.layerCount = 1;
@@ -99,7 +96,7 @@ void Texture::_load(VulkanImpl* renderer)
 	view.format = info.format;
 	view.subresourceRange = range;
 
-	vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_view);
+	VkCheck(vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_view));
 
 	//
 
