@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "VulkanImpl.h"
+#include "Light.h"
 
 struct Camera;
 class Model;
@@ -21,6 +22,7 @@ public:
 
 private:
 	std::vector<Model*> _models;
+	std::vector<Light> _lights;
 
 	VulkanImpl* _renderer;
 	Camera* _camera;

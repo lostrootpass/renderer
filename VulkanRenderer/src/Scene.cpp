@@ -5,14 +5,6 @@
 Scene::Scene(VulkanImpl& renderer) : _camera(nullptr), _renderer(&renderer)
 {
 	_init();
-
-
-	//Test data - two distinct models at different positions.
-	addModel("cube");
-	addModel("cube2");
-	addModel("ground");
-	_models[0]->setPosition(glm::vec3(-1.5f, 0.0f, 1.0f));
-	_models[1]->setPosition(glm::vec3(1.5f, 0.0f, 1.0f));
 }
 
 Scene::~Scene()
@@ -40,6 +32,7 @@ void Scene::addModel(const std::string& name)
 
 void Scene::draw(VkCommandBuffer cmd) const
 {
+	_renderer->bindDescriptorSetById(cmd, SET_BINDING_LIGHTS, nullptr);
 	_renderer->bindDescriptorSetById(cmd, SET_BINDING_CAMERA, nullptr);
 
 	for (Model* model : _models)
@@ -60,7 +53,22 @@ void Scene::_init()
 {
 	VkExtent2D extent = _renderer->extent();
 	_camera = new Camera(extent.width, extent.height);
-	_camera->eye = glm::vec3(0.0f, -8.0f, 2.0f);
+	_camera->eye = glm::vec3(-8.0f, 0.0f, 2.0f);
 	glm::mat4 projView = _camera->projectionViewMatrix();
 	_renderer->updateUniform("camera", (void*)&projView, sizeof(projView));
+
+
+	//Test data
+
+	addModel("cube");
+	addModel("cube2");
+	addModel("ground");
+	_models[0]->setPosition(glm::vec3(0.0f, -1.5f, 1.0f));
+	_models[1]->setPosition(glm::vec3(0.0f, 1.5f, 1.0f));
+
+	Light light;
+	light.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	light.pos = glm::vec3(-8.0f, 0.0f, 5.0f);
+	_lights.push_back(light);
+	_renderer->updateUniform("light", (void*)&light, sizeof(light));
 }

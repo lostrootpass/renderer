@@ -187,7 +187,8 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 	vbs.stride = sizeof(Vertex);
 	vbs.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-	VkVertexInputAttributeDescription vtxAttrs[3] = {};
+	const int VTX_ATTR_COUNT = 4;
+	VkVertexInputAttributeDescription vtxAttrs[VTX_ATTR_COUNT] = {};
 	vtxAttrs[0].binding = 0;
 	vtxAttrs[0].location = 0;
 	vtxAttrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
@@ -203,11 +204,16 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 	vtxAttrs[2].format = VK_FORMAT_R32G32_SFLOAT;
 	vtxAttrs[2].offset = offsetof(Vertex, uv);
 
+	vtxAttrs[3].binding = 0;
+	vtxAttrs[3].location = 3;
+	vtxAttrs[3].format = VK_FORMAT_R32G32B32_SFLOAT;
+	vtxAttrs[3].offset = offsetof(Vertex, normal);
+
 	VkPipelineVertexInputStateCreateInfo vis = {};
 	vis.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vis.vertexBindingDescriptionCount = 1;
 	vis.pVertexBindingDescriptions = &vbs;
-	vis.vertexAttributeDescriptionCount = 3;
+	vis.vertexAttributeDescriptionCount = VTX_ATTR_COUNT;
 	vis.pVertexAttributeDescriptions = vtxAttrs;
 
 	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
@@ -504,8 +510,8 @@ void VulkanImpl::_createCommandPool()
 void VulkanImpl::_createDescriptorSets()
 {
 	VkDescriptorPoolSize sizes[4] = {};
-	//Camera matrix
-	sizes[0].descriptorCount = 1;
+	//Camera matrix & lights
+	sizes[0].descriptorCount = 2;
 	sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 
 	//Sampler
@@ -600,6 +606,25 @@ void VulkanImpl::_createDescriptorSets()
 
 		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
 	}
+
+	{
+		VkDescriptorBufferInfo buff = {};
+		Uniform* uniform = createUniform("light", sizeof(Light));
+		buff.buffer = uniform->localBuffer.buffer;
+		buff.offset = 0;
+		buff.range = uniform->size;
+
+		VkWriteDescriptorSet writes[1] = {};
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].descriptorCount = 1;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writes[0].dstSet = _descriptorSets[SET_BINDING_LIGHTS];
+		writes[0].dstBinding = 0;
+		writes[0].dstArrayElement = 0;
+		writes[0].pBufferInfo = &buff;
+
+		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
+	}
 }
 
 void VulkanImpl::_createInstance()
@@ -676,10 +701,15 @@ void VulkanImpl::_createLayouts()
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[3]);
 
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[4]);
+
 	_descriptorLayouts.push_back(layouts[0]);
 	_descriptorLayouts.push_back(layouts[1]);
 	_descriptorLayouts.push_back(layouts[2]);
 	_descriptorLayouts.push_back(layouts[3]);
+	_descriptorLayouts.push_back(layouts[4]);
 
 	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

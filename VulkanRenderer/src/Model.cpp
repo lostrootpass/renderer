@@ -125,10 +125,18 @@ void Model::_loadModel(VulkanImpl* renderer)
 
 	for (const tinyobj::shape_t& shape : shapes)
 	{
+		//TODO: rather than store this per-vertex, store the material index and the material info separately.
+		glm::vec3 diffuse(1.0f, 1.0f, 1.0f);
+		if (materials.size() && shape.mesh.material_ids.size() && shape.mesh.material_ids[0] != -1)
+		{
+			tinyobj::material_t m = materials[shape.mesh.material_ids[0]];
+			diffuse = glm::vec3(m.diffuse[0], m.diffuse[1], m.diffuse[2]);
+		}
+
 		for (tinyobj::index_t i : shape.mesh.indices)
 		{
 			Vertex vtx = {};
-			vtx.color = { 1.0f, 1.0f, 1.0f };
+			vtx.color = diffuse;
 
 			vtx.position = {
 				attrib.vertices[3 * i.vertex_index] * scale,
@@ -143,6 +151,16 @@ void Model::_loadModel(VulkanImpl* renderer)
 					attrib.texcoords[2 * i.texcoord_index + 1]
 				};
 			}
+
+			if (attrib.normals.size())
+			{
+				vtx.normal = {
+					attrib.normals[3 * i.normal_index],
+					attrib.normals[3 * i.normal_index + 1],
+					attrib.normals[3 * i.normal_index + 2],
+				};
+			}
+			//TODO: else calculate the normal ourselves
 
 			_vertices.push_back(vtx);
 			_indices.push_back((uint32_t)_indices.size());

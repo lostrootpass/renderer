@@ -86,5 +86,8 @@
     <ClInclude Include="src\TextureCache.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\Light.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

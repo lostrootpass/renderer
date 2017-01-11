@@ -22,6 +22,7 @@ typedef enum SetBinding
 	SET_BINDING_MODEL,
 	SET_BINDING_SAMPLER,
 	SET_BINDING_TEXTURE,
+	SET_BINDING_LIGHTS,
 	SET_BINDING_COUNT //Always have this be last.
 } SetBinding;
 

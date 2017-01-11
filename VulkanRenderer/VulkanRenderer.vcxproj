@@ -143,6 +143,7 @@
     <ClInclude Include="src\Buffer.h" />
     <ClInclude Include="src\Camera.h" />
     <ClInclude Include="src\Core.h" />
+    <ClInclude Include="src\Light.h" />
     <ClInclude Include="src\Model.h" />
     <ClInclude Include="src\Scene.h" />
     <ClInclude Include="src\ShaderCache.h" />
