@@ -43,6 +43,10 @@ void Scene::draw(VkCommandBuffer cmd) const
 
 void Scene::update(float dtime)
 {
+	_camera->update(dtime);
+	glm::mat4 projView = _camera->projectionViewMatrix();
+	_renderer->updateUniform("camera", (void*)&projView, sizeof(projView));
+
 	for (Model* model : _models)
 	{
 		model->update(_renderer, dtime);
@@ -53,7 +57,6 @@ void Scene::_init()
 {
 	VkExtent2D extent = _renderer->extent();
 	_camera = new Camera(extent.width, extent.height);
-	_camera->eye = glm::vec3(-8.0f, 0.0f, 2.0f);
 	glm::mat4 projView = _camera->projectionViewMatrix();
 	_renderer->updateUniform("camera", (void*)&projView, sizeof(projView));
 

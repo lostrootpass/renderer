@@ -5,7 +5,7 @@
 #include "VulkanImpl.h"
 #include "Light.h"
 
-struct Camera;
+class Camera;
 class Model;
 
 class Scene
