@@ -40,6 +40,19 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 	vkCmdDrawIndexed(cmd, (uint32_t)_indices.size(), 1, 0, 0, 0);
 }
 
+void Model::drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd)
+{
+	std::vector<uint32_t> descOffsets = { (uint32_t)renderer->getAlignedRange(sizeof(glm::mat4))*_index };
+	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets, true);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowPipeline);
+
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(cmd, 0, 1, &_vertexBuffer.buffer, offsets);
+	vkCmdBindIndexBuffer(cmd, _indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(cmd, (uint32_t)_indices.size(), 1, 0, 0, 0);
+}
+
 void Model::update(VulkanImpl* renderer, float dtime)
 {
 	static float time = 0;
@@ -60,6 +73,7 @@ void Model::_load(VulkanImpl* renderer)
 	//sprintf_s(shaderName, "models/%s/%s", _name.c_str(), _name.c_str());
 	//_pipeline = renderer->getPipelineForShader(shaderName);
 	_pipeline = renderer->getPipelineForShader("shaders/common/model");
+	_shadowPipeline = renderer->getPipelineForShader("shaders/common/shadowmap", true);
 
 	//Vertex buffer
 	{

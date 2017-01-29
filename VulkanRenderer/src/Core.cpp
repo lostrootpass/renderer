@@ -33,6 +33,8 @@ void Core::run()
 		_pollEvents();
 		_scene->update(dtime.count());
 		_renderer->render();
+
+		Sleep(10);
 	}
 
 	_shutdown();

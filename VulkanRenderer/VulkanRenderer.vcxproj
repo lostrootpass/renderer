@@ -136,6 +136,7 @@
     <ClCompile Include="src\Model.cpp" />
     <ClCompile Include="src\Scene.cpp" />
     <ClCompile Include="src\ShaderCache.cpp" />
+    <ClCompile Include="src\ShadowMap.cpp" />
     <ClCompile Include="src\SwapChain.cpp" />
     <ClCompile Include="src\Texture.cpp" />
     <ClCompile Include="src\TextureCache.cpp" />
@@ -151,6 +152,7 @@
     <ClInclude Include="src\Model.h" />
     <ClInclude Include="src\Scene.h" />
     <ClInclude Include="src\ShaderCache.h" />
+    <ClInclude Include="src\ShadowMap.h" />
     <ClInclude Include="src\SwapChain.h" />
     <ClInclude Include="src\Texture.h" />
     <ClInclude Include="src\TextureCache.h" />

@@ -15,6 +15,7 @@ const std::string ASSET_PATH = "assets/";
 class Model;
 class Scene;
 class SwapChain;
+class ShadowMap;
 
 typedef enum SetBinding
 {
@@ -23,6 +24,7 @@ typedef enum SetBinding
 	SET_BINDING_SAMPLER,
 	SET_BINDING_TEXTURE,
 	SET_BINDING_LIGHTS,
+	SET_BINDING_SHADOW,
 	SET_BINDING_COUNT //Always have this be last.
 } SetBinding;
 
@@ -48,11 +50,11 @@ public:
 	VulkanImpl();
 	~VulkanImpl();
 
-	void allocateTextureDescriptor(VkDescriptorSet& set);
+	void allocateTextureDescriptor(VkDescriptorSet& set, SetBinding binding = SET_BINDING_TEXTURE);
 
-	void bindDescriptorSet(VkCommandBuffer cmd, SetBinding index, const VkDescriptorSet& set) const;
+	void bindDescriptorSet(VkCommandBuffer cmd, SetBinding index, const VkDescriptorSet& set, bool offscreen = false) const;
 
-	void bindDescriptorSetById(VkCommandBuffer cmd, SetBinding set, std::vector<uint32_t>* offsets = nullptr) const;
+	void bindDescriptorSetById(VkCommandBuffer cmd, SetBinding set, std::vector<uint32_t>* offsets = nullptr, bool offscreen = false) const;
 
 	void copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset = 0) const;
 
@@ -64,7 +66,7 @@ public:
 
 	uint32_t getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const;
 
-	const VkPipeline getPipelineForShader(const std::string& shaderName);
+	const VkPipeline getPipelineForShader(const std::string& shaderName, bool useOffscreenLayout = false);
 
 	void init(const Window& window);
 
@@ -135,6 +137,11 @@ public:
 		return _surface;
 	}
 
+	void setOffscreenPass(VkRenderPass p)
+	{
+		_offscreenPass = p;
+	}
+
 private:
 	struct QueueInfo
 	{
@@ -154,7 +161,9 @@ private:
 	VkInstance _instance;
 	VkSurfaceKHR _surface;
 	VkRenderPass _renderPass;
+	VkRenderPass _offscreenPass;
 	VkPipelineLayout _pipelineLayout;
+	VkPipelineLayout _offscreenLayout;
 	VkSampler _sampler;
 	VkCommandPool _commandPool;
 	VkDescriptorPool _descriptorPool;
@@ -165,6 +174,7 @@ private:
 	QueueInfo _presentQueue;
 
 	SwapChain* _swapChain;
+	ShadowMap* _shadowMap;
 
 	void _allocateCommandBuffers();
 	void _cleanup();

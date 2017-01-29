@@ -5,6 +5,7 @@
 #include "Model.h"
 #include "Camera.h"
 #include "Scene.h"
+#include "ShadowMap.h"
 
 #include <set>
 
@@ -19,7 +20,7 @@ VkPhysicalDevice VulkanImpl::_physicalDevice = VK_NULL_HANDLE;
 const int MAX_TEXTURES = 64;
 const int MAX_MODELS = 64;
 
-VulkanImpl::VulkanImpl() : _swapChain(nullptr)
+VulkanImpl::VulkanImpl() : _swapChain(nullptr), _shadowMap(nullptr)
 {
 
 }
@@ -29,21 +30,21 @@ VulkanImpl::~VulkanImpl()
 	_cleanup();
 }
 
-void VulkanImpl::allocateTextureDescriptor(VkDescriptorSet& set)
+void VulkanImpl::allocateTextureDescriptor(VkDescriptorSet& set, SetBinding binding)
 {
 	VkDescriptorSetAllocateInfo alloc = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
 	alloc.descriptorSetCount = 1;
 	alloc.descriptorPool = _descriptorPool;
-	alloc.pSetLayouts = &_descriptorLayouts[3];
+	alloc.pSetLayouts = &_descriptorLayouts[binding];
 	VkCheck(vkAllocateDescriptorSets(VulkanImpl::device(), &alloc, &set));
 }
 
-void VulkanImpl::bindDescriptorSet(VkCommandBuffer cmd, SetBinding index, const VkDescriptorSet& set) const
+void VulkanImpl::bindDescriptorSet(VkCommandBuffer cmd, SetBinding index, const VkDescriptorSet& set, bool offscreen) const
 {
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, index, 1, &set, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, offscreen? _offscreenLayout : _pipelineLayout, index, 1, &set, 0, nullptr);
 }
 
-void VulkanImpl::bindDescriptorSetById(VkCommandBuffer cmd, SetBinding set, std::vector<uint32_t>* offsets) const
+void VulkanImpl::bindDescriptorSetById(VkCommandBuffer cmd, SetBinding set, std::vector<uint32_t>* offsets, bool offscreen) const
 {
 	if (set > SET_BINDING_COUNT)
 		return;
@@ -51,7 +52,7 @@ void VulkanImpl::bindDescriptorSetById(VkCommandBuffer cmd, SetBinding set, std:
 	uint32_t offsetCount = (offsets ? (uint32_t)offsets->size() : 0);
 	const uint32_t* offsetData = (offsets ? offsets->data() : nullptr);
 
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, set, 1, &_descriptorSets[set], offsetCount, offsetData);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, offscreen ? _offscreenLayout : _pipelineLayout, set, 1, &_descriptorSets[set], offsetCount, offsetData);
 }
 
 void VulkanImpl::copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset) const
@@ -136,7 +137,7 @@ uint32_t VulkanImpl::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags fla
 	return -1;
 }
 
-const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
+const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName, bool useOffscreenLayout)
 {
 	if (_pipelines.find(shaderName) != _pipelines.end())
 		return _pipelines[shaderName];
@@ -160,8 +161,11 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 
 	VkPipelineColorBlendStateCreateInfo cbs = {};
 	cbs.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	cbs.attachmentCount = 1;
-	cbs.pAttachments = &cba;
+	if (!useOffscreenLayout)
+	{
+		cbs.attachmentCount = 1;
+		cbs.pAttachments = &cba;
+	}
 	cbs.logicOp = VK_LOGIC_OP_COPY;
 
 	VkPipelineInputAssemblyStateCreateInfo ias = {};
@@ -179,6 +183,9 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 	rs.polygonMode = VK_POLYGON_MODE_FILL;
 	rs.lineWidth = 1.0f;
 	rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rs.depthBiasEnable = VK_TRUE;
+	rs.depthBiasConstantFactor = 0.005f;
+	rs.depthBiasSlopeFactor = 0.01f;
 
 	VkVertexInputBindingDescription vbs = {};
 	vbs.binding = 0;
@@ -214,7 +221,12 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 	vis.vertexAttributeDescriptionCount = VTX_ATTR_COUNT;
 	vis.pVertexAttributeDescriptions = vtxAttrs;
 
-	VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
+	VkExtent2D extent;
+	if (useOffscreenLayout)
+		extent = { 1024, 1024 };
+	else
+		extent = _swapChain->surfaceCapabilities().currentExtent;
+
 	VkRect2D sc = { 0, 0, extent.width, extent.height };
 
 	VkViewport vp = {};
@@ -238,9 +250,10 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName)
 
 	VkGraphicsPipelineCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	info.layout = _pipelineLayout;
-	info.renderPass = _renderPass;
+	info.layout = useOffscreenLayout ? _offscreenLayout : _pipelineLayout;
+	info.renderPass = useOffscreenLayout ? _offscreenPass : _renderPass;
 	info.stageCount = 2;
+	info.subpass = useOffscreenLayout ? 0 : 0;
 	info.pStages = stages;
 	info.pColorBlendState = &cbs;
 	info.pInputAssemblyState = &ias;
@@ -275,6 +288,8 @@ void VulkanImpl::init(const Window& window)
 	_createSampler();
 	_createDescriptorSets();
 	_allocateCommandBuffers();
+
+	_shadowMap = new ShadowMap(*this);
 }
 
 void VulkanImpl::recordCommandBuffers(const Scene* scene)
@@ -305,7 +320,13 @@ void VulkanImpl::recordCommandBuffers(const Scene* scene)
 
 		VkCheck(vkBeginCommandBuffer(buffer, &beginInfo));
 
+		if(_shadowMap)
+			_shadowMap->render(buffer, scene);
+
 		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+
+		if(_shadowMap)
+			bindDescriptorSet(buffer, SET_BINDING_SHADOW, _shadowMap->set());
 
 		if(scene)
 			scene->draw(buffer);
@@ -460,11 +481,15 @@ void VulkanImpl::_cleanup()
 	_pipelines.clear();
 
 	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+	vkDestroyPipelineLayout(_device, _offscreenLayout, nullptr);
 
 	for (VkDescriptorSetLayout layout : _descriptorLayouts)
 	{
 		vkDestroyDescriptorSetLayout(_device, layout, nullptr);
 	}
+
+	delete _shadowMap;
+	_shadowMap = nullptr;
 
 	delete _swapChain;
 	_swapChain = nullptr;
@@ -508,7 +533,7 @@ void VulkanImpl::_createDescriptorSets()
 	sizes[1].type = VK_DESCRIPTOR_TYPE_SAMPLER;
 
 	//Textures
-	sizes[2].descriptorCount = MAX_TEXTURES + 1;
+	sizes[2].descriptorCount = MAX_TEXTURES + 2;
 	sizes[2].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 
 	//Model data
@@ -649,51 +674,73 @@ void VulkanImpl::_createInstance()
 
 void VulkanImpl::_createLayouts()
 {
-	VkDescriptorSetLayoutBinding bindings[2] = {};
-	bindings[0].binding = 0;
-	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	bindings[0].descriptorCount = 1;
+	//Screen layout
+	{
+		VkDescriptorSetLayoutBinding bindings[2] = {};
+		bindings[0].binding = 0;
+		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		bindings[0].descriptorCount = 1;
 
-	VkDescriptorSetLayoutCreateInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	info.bindingCount = 1;
-	info.pBindings = bindings;
+		VkDescriptorSetLayoutCreateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		info.bindingCount = 1;
+		info.pBindings = bindings;
 
-	VkDescriptorSetLayout layouts[SET_BINDING_COUNT];
+		VkDescriptorSetLayout layouts[SET_BINDING_COUNT];
 
-	VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[0]));
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[0]));
 
-	info.bindingCount = 1;
-	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[1]);
+		info.bindingCount = 1;
+		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[1]));
 
-	info.bindingCount = 1;
-	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	bindings[0].descriptorCount = 1;
-	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[2]);
+		info.bindingCount = 1;
+		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+		bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		bindings[0].descriptorCount = 1;
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[2]));
 
-	bindings[0].binding = 0;
-	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[3]);
+		info.bindingCount = 1;
+		bindings[0].binding = 0;
+		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		//bindings[1].binding = 1;
+		//bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		//bindings[1].descriptorCount = 1;
+		//bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[3]));
 
-	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
-	vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[4]);
+		info.bindingCount = 1;
+		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[4]));
 
-	_descriptorLayouts.push_back(layouts[0]);
-	_descriptorLayouts.push_back(layouts[1]);
-	_descriptorLayouts.push_back(layouts[2]);
-	_descriptorLayouts.push_back(layouts[3]);
-	_descriptorLayouts.push_back(layouts[4]);
+		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[5]));
 
-	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
-	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutCreateInfo.pSetLayouts = _descriptorLayouts.data();
-	layoutCreateInfo.setLayoutCount = (uint32_t)_descriptorLayouts.size();
+		_descriptorLayouts.push_back(layouts[0]);
+		_descriptorLayouts.push_back(layouts[1]);
+		_descriptorLayouts.push_back(layouts[2]);
+		_descriptorLayouts.push_back(layouts[3]);
+		_descriptorLayouts.push_back(layouts[4]);
+		_descriptorLayouts.push_back(layouts[5]);
 
-	VkCheck(vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout));
+		VkPipelineLayoutCreateInfo layoutCreateInfo = {};
+		layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		layoutCreateInfo.pSetLayouts = _descriptorLayouts.data();
+		layoutCreateInfo.setLayoutCount = (uint32_t)_descriptorLayouts.size();
+
+		VkCheck(vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout));
+
+		VkCheck(vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_offscreenLayout));
+	}
+
+
+	//Offscreen layout
+	{
+		//VkCheck(vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_offscreenLayout));
+	}
 }
 
 void VulkanImpl::_createRenderPass()
@@ -770,7 +817,7 @@ void VulkanImpl::_createSampler()
 	samplerInfo.magFilter = VK_FILTER_LINEAR;
 
 	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 0.0f;
+	samplerInfo.maxLod = 1.0f;
 
 	samplerInfo.anisotropyEnable = VK_TRUE;
 	samplerInfo.maxAnisotropy = 16;

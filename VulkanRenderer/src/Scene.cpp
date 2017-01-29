@@ -41,6 +41,17 @@ void Scene::draw(VkCommandBuffer cmd) const
 	}
 }
 
+void Scene::drawShadow(VkCommandBuffer cmd) const
+{
+	_renderer->bindDescriptorSetById(cmd, SET_BINDING_LIGHTS, nullptr, true);
+	_renderer->bindDescriptorSetById(cmd, SET_BINDING_CAMERA, nullptr, true);
+
+	for (Model* model : _models)
+	{
+		model->drawShadow(_renderer, cmd);
+	}
+}
+
 void Scene::update(float dtime)
 {
 	_camera->update(dtime);
@@ -69,9 +80,20 @@ void Scene::_init()
 	_models[0]->setPosition(glm::vec3(0.0f, -1.5f, 1.0f));
 	_models[1]->setPosition(glm::vec3(0.0f, 1.5f, 1.0f));
 
+
+	glm::vec3 eye = glm::vec3(8.0f, 8.0f, 8.0f);
+	glm::mat4 mvp = glm::perspective(glm::radians(60.0f), 1.0f, 1.0f, 100.0f);
+	mvp[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
+
+	glm::mat4 view = glm::lookAt(eye, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+	mvp *= view;
+
 	Light light;
 	light.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-	light.pos = glm::vec3(-8.0f, 0.0f, 5.0f);
+	light.pos = eye;
+	light.mvp = mvp;
+
 	_lights.push_back(light);
 	_renderer->updateUniform("light", (void*)&light, sizeof(light));
 }

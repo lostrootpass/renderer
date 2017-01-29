@@ -28,6 +28,8 @@ public:
 
 	void draw(VulkanImpl* renderer, VkCommandBuffer cmd);
 
+	void drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd);
+
 	void update(VulkanImpl*, float dtime);
 
 	inline const std::string& name() const
@@ -49,6 +51,7 @@ private:
 	glm::vec3 _position;
 
 	VkPipeline _pipeline;
+	VkPipeline _shadowPipeline;
 	
 	Buffer _vertexBuffer;
 	Buffer _indexBuffer;

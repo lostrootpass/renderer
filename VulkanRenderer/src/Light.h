@@ -5,6 +5,7 @@
 
 struct Light
 {
+	glm::mat4 mvp;
 	glm::vec4 color;
 	glm::vec3 pos;
 };

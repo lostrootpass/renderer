@@ -5,27 +5,29 @@ layout(location = 0) in vec3 color;
 layout(location = 1) in vec2 uv;
 layout(location = 2) in vec3 normal;
 layout(location = 3) in vec3 lightVec;
+layout(location = 4) in vec4 shadowCoord;
 
 layout(location = 0) out vec4 fragColor;
 
 layout(set = 2, binding = 0) uniform sampler texsampler;
 layout(set = 3, binding = 0) uniform texture2D diffuse;
 layout(set = 4, binding = 0) uniform LightData {
+    mat4 mvp;
     vec4 color;
     vec3 pos;
 } lightData;
-// layout(set = 5, binding = 0) uniform MaterialData {
-//     vec4 diffuse;
-// } material;
+layout(set = 5, binding = 0) uniform texture2D shadowMap;
 
 void main() {
-    //fragColor = vec4(color, 1.0);
-    //fragColor = texture(sampler2D(diffuse, texsampler), vec2(uv.x, 1.0 - uv.y));
-    //fragColor = texture(sampler2D(diffuse, texsampler), uv);
+    vec4 coord = shadowCoord/ shadowCoord.w;
     vec4 ambient = lightData.color * 0.2;
     vec4 base = texture(sampler2D(diffuse, texsampler), uv);
-    vec4 emissive = base * 0.2;
-    fragColor = ambient + (base * (lightData.color * max(0.0, dot(normalize(lightVec), normal))));
-    //fragColor = (lightData.color * max(0.0, dot(normalize(lightVec), normal)));
-    //fragColor = fragColor * texture(sampler2D(diffuse, texsampler), uv);
+    vec4 emissive = vec4(base.xyz * 0.2, 1.0);
+    vec4 shadow = texture(sampler2D(shadowMap, texsampler), coord.xy);
+
+    float shadowValue = 1.0;
+    if(coord.z > shadow.z)
+        shadowValue = 0.0;
+
+    fragColor = emissive + (base * shadowValue * (lightData.color * max(0.0, dot(normalize(lightVec), normal))));
 }

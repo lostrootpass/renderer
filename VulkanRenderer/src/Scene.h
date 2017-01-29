@@ -18,6 +18,8 @@ public:
 
 	void draw(VkCommandBuffer cmd) const;
 
+	void drawShadow(VkCommandBuffer cmd) const;
+
 	void update(float dtime);
 
 private:
