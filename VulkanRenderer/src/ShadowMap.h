@@ -2,6 +2,7 @@
 #define SHADOW_MAP_H_
 
 #include "VulkanImpl.h"
+#include "Texture.h"
 
 class ShadowMap
 {
@@ -13,22 +14,15 @@ public:
 
 	VkDescriptorSet set() const
 	{
-		return _set;
+		return _depthTexture->set();
 	}
 
 private:
 	VkRenderPass _renderPass;
 	VkFramebuffer _framebuffer;
 
-	VkImageView _depthView;
-	VkImage _depthImage;
-	VkDeviceMemory _depthMemory;
+	Texture* _depthTexture;
 
-	VkDescriptorSet _set;
-
-	VulkanImpl* _renderer;
-
-	void _createDepthBuffer(VulkanImpl* renderer);
 	void _createFramebuffer();
 	void _createRenderPass();
 	void _init(VulkanImpl* renderer);

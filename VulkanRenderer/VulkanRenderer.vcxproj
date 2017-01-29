@@ -150,7 +150,9 @@
     <ClInclude Include="src\Core.h" />
     <ClInclude Include="src\Light.h" />
     <ClInclude Include="src\Model.h" />
+    <ClInclude Include="src\RenderPass.h" />
     <ClInclude Include="src\Scene.h" />
+    <ClInclude Include="src\SetBinding.h" />
     <ClInclude Include="src\ShaderCache.h" />
     <ClInclude Include="src\ShadowMap.h" />
     <ClInclude Include="src\SwapChain.h" />

@@ -1,0 +1,16 @@
+#ifndef SET_BINDING_H_
+#define SET_BINDING_H_
+
+typedef enum SetBinding
+{
+	SET_BINDING_CAMERA,
+	SET_BINDING_MODEL,
+	SET_BINDING_SAMPLER,
+	SET_BINDING_TEXTURE,
+	SET_BINDING_LIGHTS,
+	SET_BINDING_SHADOW,
+	SET_BINDING_COUNT //Always have this be last.
+} SetBinding;
+
+
+#endif //SET_BINDING_H_

@@ -1,8 +1,8 @@
 #include "ShadowMap.h"
 #include "Scene.h"
+#include "Texture.h"
 
-const int SHADOW_MAP_WIDTH = 1024;
-const int SHADOW_MAP_HEIGHT = 1024;
+const uint32_t SHADOW_DIM = 1024;
 const VkFormat SHADOW_MAP_FORMAT = VK_FORMAT_D32_SFLOAT;
 
 ShadowMap::ShadowMap(VulkanImpl& renderer)
@@ -12,14 +12,10 @@ ShadowMap::ShadowMap(VulkanImpl& renderer)
 
 ShadowMap::~ShadowMap()
 {
-	const VkDevice d = VulkanImpl::device();
+	vkDestroyRenderPass(VulkanImpl::device(), _renderPass, nullptr);
+	vkDestroyFramebuffer(VulkanImpl::device(), _framebuffer, nullptr);
 
-	vkDestroyRenderPass(d, _renderPass, nullptr);
-	vkDestroyFramebuffer(d, _framebuffer, nullptr);
-
-	vkDestroyImageView(d, _depthView, nullptr);
-	vkDestroyImage(d, _depthImage, nullptr);
-	vkFreeMemory(d, _depthMemory, nullptr);
+	delete _depthTexture;
 }
 
 void ShadowMap::render(VkCommandBuffer cmd, const Scene* scene) const
@@ -30,7 +26,7 @@ void ShadowMap::render(VkCommandBuffer cmd, const Scene* scene) const
 	info.pClearValues = &clear;
 	info.renderPass = _renderPass;
 	info.renderArea.offset = { 0, 0 };
-	info.renderArea.extent = { SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT };
+	info.renderArea.extent = { SHADOW_DIM, SHADOW_DIM };
 	info.framebuffer = _framebuffer;
 
 	vkCmdBeginRenderPass(cmd, &info, VK_SUBPASS_CONTENTS_INLINE);
@@ -43,53 +39,18 @@ void ShadowMap::render(VkCommandBuffer cmd, const Scene* scene) const
 	//_renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, _set);
 }
 
-void ShadowMap::_createDepthBuffer(VulkanImpl* renderer)
-{
-	VkImageCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
-	info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-	info.tiling = VK_IMAGE_TILING_OPTIMAL;
-	info.extent = { SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, 1 };
-	info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	info.samples = VK_SAMPLE_COUNT_1_BIT;
-	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	info.mipLevels = 1;
-	info.arrayLayers = 1;
-	info.format = SHADOW_MAP_FORMAT;
-	info.imageType = VK_IMAGE_TYPE_2D;
-
-	VkCheck(vkCreateImage(VulkanImpl::device(), &info, nullptr, &_depthImage));
-
-	VkMemoryRequirements memReq;
-	vkGetImageMemoryRequirements(VulkanImpl::device(), _depthImage, &memReq);
-
-	VkMemoryAllocateInfo alloc = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-	alloc.allocationSize = memReq.size;
-	alloc.memoryTypeIndex = renderer->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	VkCheck(vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_depthMemory));
-	VkCheck(vkBindImageMemory(VulkanImpl::device(), _depthImage, _depthMemory, 0));
-
-	VkImageViewCreateInfo view = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-	view.format = SHADOW_MAP_FORMAT;
-	view.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	view.image = _depthImage;
-	view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-	view.subresourceRange.baseMipLevel = 0;
-	view.subresourceRange.baseArrayLayer = 0;
-	view.subresourceRange.layerCount = 1;
-	view.subresourceRange.levelCount = 1;
-
-	VkCheck(vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_depthView));
-}
-
 void ShadowMap::_createFramebuffer()
 {
+	VkImageView attachments[] = {
+		_depthTexture->view()
+	};
 	VkFramebufferCreateInfo info = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
 	info.renderPass = _renderPass;
-	info.width = SHADOW_MAP_WIDTH;
-	info.height = SHADOW_MAP_HEIGHT;
+	info.width = SHADOW_DIM;
+	info.height = SHADOW_DIM;
 	info.layers = 1;
 	info.attachmentCount = 1;
-	info.pAttachments = &_depthView;
+	info.pAttachments = attachments;
 
 	VkCheck(vkCreateFramebuffer(VulkanImpl::device(), &info, nullptr, &_framebuffer));
 }
@@ -125,32 +86,10 @@ void ShadowMap::_createRenderPass()
 
 void ShadowMap::_init(VulkanImpl* renderer)
 {
-	_renderer = renderer;
+	_depthTexture = new Texture(SHADOW_DIM, SHADOW_DIM, SHADOW_MAP_FORMAT, renderer);
 
 	_createRenderPass();
-	_createDepthBuffer(renderer);
 	_createFramebuffer();
 
 	renderer->setOffscreenPass(_renderPass);
-
-
-	//
-
-	{
-		renderer->allocateTextureDescriptor(_set, SET_BINDING_SHADOW);
-
-		VkDescriptorImageInfo info = {};
-		info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		info.imageView = _depthView;
-
-		VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-		write.descriptorCount = 1;
-		write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		write.dstSet = _set;
-		write.dstBinding = 0;
-		write.dstArrayElement = 0;
-		write.pImageInfo = &info;
-
-		vkUpdateDescriptorSets(VulkanImpl::device(), 1, &write, 0, nullptr);
-	}
 }

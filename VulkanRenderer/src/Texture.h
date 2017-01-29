@@ -4,12 +4,16 @@
 #include <vulkan/vulkan.h>
 #include <string>
 
+#include "SetBinding.h"
+
 class VulkanImpl;
 
 class Texture
 {
 public:
 	Texture(const std::string& path, VulkanImpl* renderer);
+
+	Texture(uint32_t width, uint32_t height, VkFormat format, VulkanImpl* renderer);
 
 	~Texture();
 
@@ -31,7 +35,14 @@ private:
 	VkDeviceMemory _memory;
 	VkDescriptorSet _set;
 
-	void _load(VulkanImpl* renderer);
+	uint32_t _width;
+	uint32_t _height;
+	VkFormat _format;
+
+	void _allocBindImageMemory(VulkanImpl* renderer);
+	void _createInMemory(VulkanImpl* renderer);
+	void _loadFromFile(VulkanImpl* renderer);
+	void _updateSet(VulkanImpl* renderer, SetBinding set = SET_BINDING_TEXTURE, uint32_t binding = 0);
 };
 
 #endif //TEXTURE_H_

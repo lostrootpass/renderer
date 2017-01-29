@@ -9,6 +9,7 @@
 #include "Window.h"
 #include "Buffer.h"
 #include "VulkanUtil.h"
+#include "SetBinding.h"
 
 const std::string ASSET_PATH = "assets/";
 
@@ -16,17 +17,6 @@ class Model;
 class Scene;
 class SwapChain;
 class ShadowMap;
-
-typedef enum SetBinding
-{
-	SET_BINDING_CAMERA,
-	SET_BINDING_MODEL,
-	SET_BINDING_SAMPLER,
-	SET_BINDING_TEXTURE,
-	SET_BINDING_LIGHTS,
-	SET_BINDING_SHADOW,
-	SET_BINDING_COUNT //Always have this be last.
-} SetBinding;
 
 struct Uniform
 {
