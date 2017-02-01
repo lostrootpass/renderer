@@ -18,6 +18,7 @@ layout(set = 0, binding = 0) uniform Camera {
 
 layout(set = 1, binding = 0) uniform Model {
     mat4 pos;
+    float scale;
 } model;
 
 layout(set = 4, binding = 0) uniform LightData {
@@ -40,7 +41,7 @@ const mat4 biasMatrix = mat4(
 
 void main()
 {
-    vec4 fragPos = model.pos * vec4(inPos, 1.0);
+    vec4 fragPos = model.pos * vec4(inPos * model.scale, 1.0);
     outColor = inColor;
     outUV = inUV;
     outNormal = inNormal;

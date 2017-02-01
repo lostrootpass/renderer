@@ -78,6 +78,7 @@ void Scene::_init()
 	addModel("cube2");
 	addModel("ground");
 	_models[0]->setPosition(glm::vec3(0.0f, -1.5f, 1.0f));
+	_models[0]->setScale(2.0f);
 	_models[1]->setPosition(glm::vec3(0.0f, 1.5f, 1.0f));
 
 

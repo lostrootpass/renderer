@@ -9,7 +9,8 @@
 
 static uint32_t MODEL_INDEX = 0;
 
-Model::Model(const std::string& name, VulkanImpl* renderer) : _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f))
+Model::Model(const std::string& name, VulkanImpl* renderer) 
+	: _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f)), _scale(1.0f)
 {
 	_load(renderer);
 	_index = MODEL_INDEX;
@@ -57,11 +58,11 @@ void Model::update(VulkanImpl* renderer, float dtime)
 {
 	static float time = 0;
 	time += dtime;
-	glm::mat4 model = glm::translate(glm::mat4(), _position);
+	ModelUniform model = { glm::translate(glm::mat4(), _position), _scale };
 	//model = glm::rotate(model, time, glm::vec3(0.0f, 0.0f, 1.0f));
 
 	//TODO: Don't update the GPU-local memory here, just the staging buffer.
-	renderer->updateUniform("model", (void*)&model, sizeof(model), renderer->getAlignedRange(sizeof(glm::mat4)) * _index);
+	renderer->updateUniform("model", (void*)&model, sizeof(model), renderer->getAlignedRange(sizeof(model)) * _index);
 }
 
 void Model::_load(VulkanImpl* renderer)
@@ -162,7 +163,7 @@ void Model::_loadModel(VulkanImpl* renderer)
 			{
 				vtx.uv = {
 					attrib.texcoords[2 * i.texcoord_index],
-					attrib.texcoords[2 * i.texcoord_index + 1]
+					1.0 - attrib.texcoords[2 * i.texcoord_index + 1]
 				};
 			}
 

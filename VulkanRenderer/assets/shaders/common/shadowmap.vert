@@ -5,6 +5,7 @@ layout(location = 0) in vec3 inPos;
 
 layout(set = 1, binding = 0) uniform Model {
     mat4 pos;
+    float scale;
 } model;
 
 layout(set = 4, binding = 0) uniform LightData {
@@ -20,6 +21,6 @@ out gl_PerVertex
 
 void main()
 {
-    vec4 fragPos = model.pos * vec4(inPos, 1.0);
+    vec4 fragPos = model.pos * vec4(inPos * model.scale, 1.0);
     gl_Position = lightData.mvp * fragPos;
 }

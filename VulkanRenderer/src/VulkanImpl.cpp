@@ -578,7 +578,7 @@ void VulkanImpl::_createDescriptorSets()
 	}
 
 	{
-		size_t range = getAlignedRange(sizeof(glm::mat4));
+		size_t range = getAlignedRange(sizeof(ModelUniform));
 
 		VkDescriptorBufferInfo buff = {};
 		Uniform* uniform = createUniform("model", range * MAX_MODELS);

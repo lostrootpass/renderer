@@ -20,6 +20,12 @@ struct Vertex
 	glm::vec3 normal;
 };
 
+struct ModelUniform
+{
+	glm::mat4 pos;
+	float scale;
+};
+
 class Model
 {
 public:
@@ -42,6 +48,11 @@ public:
 		_position = pos;
 	}
 
+	inline void setScale(float scale)
+	{
+		_scale = glm::max(0.0f, scale);
+	}
+
 private:
 	std::vector<Vertex> _vertices;
 	std::vector<uint32_t> _indices;
@@ -59,6 +70,8 @@ private:
 	Texture* _texture;
 
 	uint32_t _index;
+
+	float _scale;
 
 	void _load(VulkanImpl* renderer);
 	void _loadTexture(const std::string& path, VulkanImpl* renderer);
