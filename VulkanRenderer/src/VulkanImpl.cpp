@@ -185,7 +185,7 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName,
 	rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rs.depthBiasEnable = VK_TRUE;
 	rs.depthBiasConstantFactor = 0.005f;
-	rs.depthBiasSlopeFactor = 0.01f;
+	rs.depthBiasSlopeFactor = 0.8f;
 
 	VkVertexInputBindingDescription vbs = {};
 	vbs.binding = 0;
@@ -701,13 +701,13 @@ void VulkanImpl::_createLayouts()
 		bindings[0].descriptorCount = 1;
 		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[2]));
 
-		info.bindingCount = 1;
+		info.bindingCount = 2;
 		bindings[0].binding = 0;
 		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		//bindings[1].binding = 1;
-		//bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		//bindings[1].descriptorCount = 1;
-		//bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		bindings[1].binding = 1;
+		bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		bindings[1].descriptorCount = 1;
+		bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[3]));
 
 		info.bindingCount = 1;

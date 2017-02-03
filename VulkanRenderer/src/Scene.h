@@ -30,6 +30,8 @@ private:
 	Camera* _camera;
 
 	void _init();
+
+	void _setLightPos(const glm::vec3& pos);
 };
 
 #endif //SCENE_H_

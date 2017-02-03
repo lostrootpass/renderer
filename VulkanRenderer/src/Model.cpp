@@ -9,8 +9,9 @@
 
 static uint32_t MODEL_INDEX = 0;
 
-Model::Model(const std::string& name, VulkanImpl* renderer) 
-	: _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f)), _scale(1.0f)
+Model::Model(const std::string& name, VulkanImpl* renderer)
+	: _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f)), _scale(1.0f),
+	_diffuse(nullptr), _bumpMap(nullptr), _textureSet(VK_NULL_HANDLE)
 {
 	_load(renderer);
 	_index = MODEL_INDEX;
@@ -28,8 +29,8 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 	std::vector<uint32_t> descOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(glm::mat4))*_index};
 	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
 
-	if(_texture && _texture->view())
-		renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, _texture->set());
+	if(_textureSet)
+		renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, _textureSet);
 	
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 
@@ -59,7 +60,8 @@ void Model::update(VulkanImpl* renderer, float dtime)
 	static float time = 0;
 	time += dtime;
 	ModelUniform model = { glm::translate(glm::mat4(), _position), _scale };
-	//model = glm::rotate(model, time, glm::vec3(0.0f, 0.0f, 1.0f));
+	model.pos = glm::rotate(model.pos, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	model.pos = glm::rotate(model.pos, glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
 	//TODO: Don't update the GPU-local memory here, just the staging buffer.
 	renderer->updateUniform("model", (void*)&model, sizeof(model), renderer->getAlignedRange(sizeof(model)) * _index);
@@ -115,11 +117,6 @@ void Model::_load(VulkanImpl* renderer)
 	}
 }
 
-void Model::_loadTexture(const std::string& path, VulkanImpl* renderer)
-{
-	_texture = TextureCache::getTexture(path, *renderer);
-}
-
 void Model::_loadModel(VulkanImpl* renderer)
 {
 	char baseDir[128] = { '\0' };
@@ -138,6 +135,79 @@ void Model::_loadModel(VulkanImpl* renderer)
 	
 	const float scale = 1.0f;
 
+	glm::vec3* normals = new glm::vec3[attrib.vertices.size()];
+	std::vector<glm::vec3>* faceNormals = new std::vector<glm::vec3>[attrib.vertices.size()];
+
+	const bool perVertexNormals = true;
+
+	//TODO: this approach is quite slow and could be optimised.
+	if (!attrib.normals.size())
+	{
+		//First pass: calculate face normals.
+		for (const tinyobj::shape_t& shape : shapes)
+		{
+			for (size_t idx = 0; idx < shape.mesh.indices.size(); idx += 3)
+			{
+				tinyobj::index_t i = shape.mesh.indices[idx];
+				glm::vec3 vtx1(
+					attrib.vertices[3 * i.vertex_index + 0],
+					attrib.vertices[3 * i.vertex_index + 1],
+					attrib.vertices[3 * i.vertex_index + 2]
+				);
+
+				tinyobj::index_t j = shape.mesh.indices[idx + 1];
+				glm::vec3 vtx2(
+					attrib.vertices[3 * j.vertex_index + 0],
+					attrib.vertices[3 * j.vertex_index + 1],
+					attrib.vertices[3 * j.vertex_index + 2]
+				);
+
+				tinyobj::index_t k = shape.mesh.indices[idx + 2];
+				glm::vec3 vtx3(
+					attrib.vertices[3 * k.vertex_index + 0],
+					attrib.vertices[3 * k.vertex_index + 1],
+					attrib.vertices[3 * k.vertex_index + 2]
+				);
+
+				glm::vec3 coplanarVec1 = vtx2 - vtx1;
+				glm::vec3 coplanarVec2 = vtx3 - vtx1;
+				glm::vec3 normal = glm::normalize(glm::cross(coplanarVec1, coplanarVec2));
+
+				if (!perVertexNormals)
+				{
+					normals[i.vertex_index] = normal;
+					normals[j.vertex_index] = normal;
+					normals[k.vertex_index] = normal;
+				}
+				else
+				{
+					faceNormals[i.vertex_index].push_back(normal);
+					faceNormals[j.vertex_index].push_back(normal);
+					faceNormals[k.vertex_index].push_back(normal);
+				}
+			}
+		}
+
+		if (perVertexNormals)
+		{
+			//Second pass: calculate vertex normals.
+			for (const tinyobj::shape_t& shape : shapes)
+			{
+				for (size_t idx = 0; idx < shape.mesh.indices.size(); idx++)
+				{
+					tinyobj::index_t i = shape.mesh.indices[idx];
+					
+					glm::vec3 sum(0.0f, 0.0f, 0.0f);
+
+					for (glm::vec3 v : faceNormals[i.vertex_index])
+						sum += v;
+
+					normals[i.vertex_index] = glm::normalize(sum);
+				}
+			}
+		}
+	}
+
 	for (const tinyobj::shape_t& shape : shapes)
 	{
 		//TODO: rather than store this per-vertex, store the material index and the material info separately.
@@ -148,8 +218,10 @@ void Model::_loadModel(VulkanImpl* renderer)
 			diffuse = glm::vec3(m.diffuse[0], m.diffuse[1], m.diffuse[2]);
 		}
 
-		for (tinyobj::index_t i : shape.mesh.indices)
+		for(size_t idx = 0; idx < shape.mesh.indices.size(); idx++)
 		{
+			tinyobj::index_t i = shape.mesh.indices[idx];
+
 			Vertex vtx = {};
 			vtx.color = diffuse;
 
@@ -175,7 +247,10 @@ void Model::_loadModel(VulkanImpl* renderer)
 					attrib.normals[3 * i.normal_index + 2],
 				};
 			}
-			//TODO: else calculate the normal ourselves
+			else
+			{
+				vtx.normal = normals[i.vertex_index];
+			}
 
 			_vertices.push_back(vtx);
 			_indices.push_back((uint32_t)_indices.size());
@@ -184,8 +259,26 @@ void Model::_loadModel(VulkanImpl* renderer)
 
 	if (materials.size())
 	{
-		char diffuse[128] = { '\0' };
-		sprintf_s(diffuse, "%s%s", baseDir, materials[0].diffuse_texname.c_str());
-		_loadTexture(diffuse, renderer);
+		char texname[128] = { '\0' };
+
+		if(materials[0].diffuse_texname != "")
+		{
+			sprintf_s(texname, "%s%s", baseDir, materials[0].diffuse_texname.c_str());
+			_diffuse = TextureCache::getTexture(texname, *renderer);
+			_diffuse->bind(renderer);
+
+			//TODO: diffuse lazily allocates a set that we reuse; this should be elsewhere.
+			_textureSet = _diffuse->set();
+		}
+
+		if (materials[0].bump_texname != "")
+		{
+			sprintf_s(texname, "%s%s", baseDir, materials[0].bump_texname.c_str());
+			_bumpMap = TextureCache::getTexture(texname, *renderer);
+			_bumpMap->bind(renderer, _textureSet, 1);
+		}
 	}
+
+	delete[] normals;
+	delete[] faceNormals;
 }

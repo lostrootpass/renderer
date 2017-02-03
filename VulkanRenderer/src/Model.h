@@ -63,18 +63,19 @@ private:
 
 	VkPipeline _pipeline;
 	VkPipeline _shadowPipeline;
+	VkDescriptorSet _textureSet;
 	
 	Buffer _vertexBuffer;
 	Buffer _indexBuffer;
 
-	Texture* _texture;
+	Texture* _diffuse;
+	Texture* _bumpMap;
 
 	uint32_t _index;
 
 	float _scale;
 
 	void _load(VulkanImpl* renderer);
-	void _loadTexture(const std::string& path, VulkanImpl* renderer);
 	void _loadModel(VulkanImpl* renderer);
 };
 

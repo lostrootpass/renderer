@@ -44,7 +44,7 @@ void main()
     vec4 fragPos = model.pos * vec4(inPos * model.scale, 1.0);
     outColor = inColor;
     outUV = inUV;
-    outNormal = inNormal;
+    outNormal = mat3(model.pos) * inNormal;
     outLightVec = lightData.pos - fragPos.xyz;
     outShadowCoord = biasMatrix * lightData.mvp * fragPos;
 

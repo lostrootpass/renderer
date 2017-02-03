@@ -17,6 +17,8 @@ public:
 
 	~Texture();
 
+	void bind(VulkanImpl* renderer, VkDescriptorSet set = VK_NULL_HANDLE, uint32_t binding = 0);
+
 	inline const VkDescriptorSet& set() const
 	{
 		return _set;
@@ -42,7 +44,7 @@ private:
 	void _allocBindImageMemory(VulkanImpl* renderer);
 	void _createInMemory(VulkanImpl* renderer);
 	void _loadFromFile(VulkanImpl* renderer);
-	void _updateSet(VulkanImpl* renderer, SetBinding set = SET_BINDING_TEXTURE, uint32_t binding = 0);
+	void _updateSet(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding = 0);
 };
 
 #endif //TEXTURE_H_

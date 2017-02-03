@@ -57,6 +57,7 @@ void Scene::update(float dtime)
 	_camera->update(dtime);
 	glm::mat4 projView = _camera->projectionViewMatrix();
 	_renderer->updateUniform("camera", (void*)&projView, sizeof(projView));
+	//_setLightPos(_lights[0].pos + (glm::vec3(0.0f, -1.0f * dtime, 0.0f)));
 
 	for (Model* model : _models)
 	{
@@ -74,27 +75,32 @@ void Scene::_init()
 
 	//Test data
 
-	addModel("cube");
-	addModel("cube2");
-	addModel("ground");
-	_models[0]->setPosition(glm::vec3(0.0f, -1.5f, 1.0f));
-	_models[0]->setScale(2.0f);
-	_models[1]->setPosition(glm::vec3(0.0f, 1.5f, 1.0f));
+	//addModel("cube");
+	//addModel("cube2");
+	//addModel("ground");
+	//_models[0]->setPosition(glm::vec3(0.0f, -1.5f, 1.0f));
+	//_models[0]->setScale(2.0f);
+	//_models[1]->setPosition(glm::vec3(0.0f, 1.5f, 1.0f));
 
-
-	glm::vec3 eye = glm::vec3(8.0f, 8.0f, 8.0f);
-	glm::mat4 mvp = glm::perspective(glm::radians(60.0f), 1.0f, 1.0f, 100.0f);
-	mvp[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
-
-	glm::mat4 view = glm::lookAt(eye, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-
-	mvp *= view;
+	addModel("head");
+	_models[0]->setScale(10.0f);
 
 	Light light;
 	light.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-	light.pos = eye;
-	light.mvp = mvp;
-
 	_lights.push_back(light);
+	_setLightPos(glm::vec3(-8.0f, 4.0f, 2.0f));
+}
+
+void Scene::_setLightPos(const glm::vec3& pos)
+{
+	glm::mat4 mvp = glm::perspective(glm::radians(60.0f), 1.0f, 1.0f, 100.0f);
+	mvp[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
+
+	glm::mat4 view = glm::lookAt(pos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	mvp *= view;
+
+	Light& light = _lights[0];
+	light.pos = pos;
+	light.mvp = mvp;
 	_renderer->updateUniform("light", (void*)&light, sizeof(light));
 }

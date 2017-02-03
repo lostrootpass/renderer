@@ -87,6 +87,7 @@ void ShadowMap::_createRenderPass()
 void ShadowMap::_init(VulkanImpl* renderer)
 {
 	_depthTexture = new Texture(SHADOW_DIM, SHADOW_DIM, SHADOW_MAP_FORMAT, renderer);
+	_depthTexture->bind(renderer, 0);
 
 	_createRenderPass();
 	_createFramebuffer();

@@ -5,7 +5,7 @@
 #include "VulkanImpl.h"
 
 Texture::Texture(const std::string& path, VulkanImpl* renderer) 
-	: _path(path), _format(VK_FORMAT_R8G8B8A8_UNORM)
+	: _path(path), _format(VK_FORMAT_R8G8B8A8_UNORM), _set(VK_NULL_HANDLE)
 {
 	_loadFromFile(renderer);
 }
@@ -21,6 +21,19 @@ Texture::~Texture()
 	vkDestroyImageView(VulkanImpl::device(), _view, nullptr);
 	vkDestroyImage(VulkanImpl::device(), _image, nullptr);
 	vkFreeMemory(VulkanImpl::device(), _memory, nullptr);
+}
+
+void Texture::bind(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding)
+{
+	if (set == VK_NULL_HANDLE)
+	{
+		if (_set == VK_NULL_HANDLE)
+			renderer->allocateTextureDescriptor(_set);
+
+		_updateSet(renderer, _set, binding);
+	}
+	else
+		_updateSet(renderer, set, binding);
 }
 
 void Texture::_allocBindImageMemory(VulkanImpl* renderer)
@@ -65,7 +78,9 @@ void Texture::_createInMemory(VulkanImpl* renderer)
 
 	VkCheck(vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_view));
 
-	_updateSet(renderer, SET_BINDING_SHADOW, 0);
+	//_set = renderer->getDescriptorSet(SET_BINDING_SHADOW);
+	renderer->allocateTextureDescriptor(_set, SET_BINDING_SHADOW);
+	//_updateSet(renderer);
 }
 
 void Texture::_loadFromFile(VulkanImpl* renderer)
@@ -140,13 +155,13 @@ void Texture::_loadFromFile(VulkanImpl* renderer)
 
 	VkCheck(vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_view));
 
-	_updateSet(renderer);
+	//_set = renderer->getDescriptorSet(SET_BINDING_TEXTURE);
+	//renderer->allocateTextureDescriptor(_set, SET_BINDING_TEXTURE);
+	//_updateSet(renderer);
 }
 
-void Texture::_updateSet(VulkanImpl* renderer, SetBinding set, uint32_t binding)
+void Texture::_updateSet(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding)
 {
-	renderer->allocateTextureDescriptor(_set, set);
-
 	VkDescriptorImageInfo info = {};
 	info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	info.imageView = _view;
@@ -154,7 +169,7 @@ void Texture::_updateSet(VulkanImpl* renderer, SetBinding set, uint32_t binding)
 	VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
 	write.descriptorCount = 1;
 	write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-	write.dstSet = _set;
+	write.dstSet = set;
 	write.dstBinding = binding;
 	write.dstArrayElement = 0;
 	write.pImageInfo = &info;
