@@ -15,9 +15,52 @@ class VulkanImpl;
 struct Vertex
 {
 	glm::vec3 position;
-	glm::vec3 color;
 	glm::vec2 uv;
 	glm::vec3 normal;
+	uint8_t materialId;
+};
+
+//Materials have to be done this way as the spec only enforces maxPerStageDescriptorUniformBuffers >= 12
+//While AMD has appropriately high values for this setting, NVIDIA sticks to the minimum, thus the odd layout.
+static const size_t INDICES = 64;
+struct MaterialUniform
+{
+	glm::vec4 ambient[INDICES];
+	glm::vec4 diffuse[INDICES];
+	glm::vec4 specular[INDICES];
+	glm::vec4 emissive[INDICES];
+	glm::vec4 transparency[INDICES];
+	float shininess[INDICES];
+};
+
+struct Material
+{
+	Texture* diffuse;
+	Texture* bumpmap;
+
+	VkDescriptorSet textureSet;
+	VkDescriptorSet materialSet;
+
+	Material() :
+		diffuse(nullptr), bumpmap(nullptr), textureSet(VK_NULL_HANDLE), materialSet(VK_NULL_HANDLE)
+	{
+
+	}
+
+	~Material()
+	{
+		//Do not delete the Textures here; they are owned by TextureCache.
+	}
+};
+
+struct Shape
+{
+	Buffer vertexBuffer;
+	Buffer indexBuffer;
+
+	std::string name;
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
 };
 
 struct ModelUniform
@@ -54,8 +97,9 @@ public:
 	}
 
 private:
-	std::vector<Vertex> _vertices;
-	std::vector<uint32_t> _indices;
+	std::vector<Shape> _shapes;
+	std::vector<Material> _materials;
+	MaterialUniform _materialUniform;
 
 	std::string _name;
 
@@ -63,14 +107,7 @@ private:
 
 	VkPipeline _pipeline;
 	VkPipeline _shadowPipeline;
-	VkDescriptorSet _textureSet;
 	
-	Buffer _vertexBuffer;
-	Buffer _indexBuffer;
-
-	Texture* _diffuse;
-	Texture* _bumpMap;
-
 	uint32_t _index;
 
 	float _scale;

@@ -3,8 +3,11 @@
 
 Buffer::~Buffer()
 {
-	vkDestroyBuffer(VulkanImpl::device(), buffer, nullptr);
-	vkFreeMemory(VulkanImpl::device(), memory, nullptr);
+	if(buffer != VK_NULL_HANDLE)
+		vkDestroyBuffer(VulkanImpl::device(), buffer, nullptr);
+
+	if(memory != VK_NULL_HANDLE)
+		vkFreeMemory(VulkanImpl::device(), memory, nullptr);
 }
 
 void Buffer::copyData(void* data, size_t size, size_t offset) const

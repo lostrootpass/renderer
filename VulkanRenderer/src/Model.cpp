@@ -10,8 +10,7 @@
 static uint32_t MODEL_INDEX = 0;
 
 Model::Model(const std::string& name, VulkanImpl* renderer)
-	: _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f)), _scale(1.0f),
-	_diffuse(nullptr), _bumpMap(nullptr), _textureSet(VK_NULL_HANDLE)
+	: _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f)), _scale(1.0f)
 {
 	_load(renderer);
 	_index = MODEL_INDEX;
@@ -26,33 +25,42 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 {
 	renderer->bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
 	
-	std::vector<uint32_t> descOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(glm::mat4))*_index};
+	std::vector<uint32_t> descOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(ModelUniform))*_index};
 	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
 
-	if(_textureSet)
-		renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, _textureSet);
+	std::vector<uint32_t> matOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(MaterialUniform))*_index};
+	renderer->bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
+
+	if(_materials.size() && _materials[0].textureSet)
+		renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, _materials[0].textureSet);
 	
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 
 	//TODO: copy whatever is in the Staging Buffer to GPU local memory
 	
-	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(cmd, 0, 1, &_vertexBuffer.buffer, offsets);
-	vkCmdBindIndexBuffer(cmd, _indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdDrawIndexed(cmd, (uint32_t)_indices.size(), 1, 0, 0, 0);
+	for (const Shape& s : _shapes)
+	{
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(cmd, 0, 1, &s.vertexBuffer.buffer, offsets);
+		vkCmdBindIndexBuffer(cmd, s.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(cmd, (uint32_t)s.indices.size(), 1, 0, 0, 0);
+	}
 }
 
 void Model::drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd)
 {
-	std::vector<uint32_t> descOffsets = { (uint32_t)renderer->getAlignedRange(sizeof(glm::mat4))*_index };
+	std::vector<uint32_t> descOffsets = { (uint32_t)renderer->getAlignedRange(sizeof(ModelUniform))*_index };
 	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets, true);
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowPipeline);
 
-	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(cmd, 0, 1, &_vertexBuffer.buffer, offsets);
-	vkCmdBindIndexBuffer(cmd, _indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdDrawIndexed(cmd, (uint32_t)_indices.size(), 1, 0, 0, 0);
+	for (const Shape& s : _shapes)
+	{
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(cmd, 0, 1, &s.vertexBuffer.buffer, offsets);
+		vkCmdBindIndexBuffer(cmd, s.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(cmd, (uint32_t)s.indices.size(), 1, 0, 0, 0);
+	}
 }
 
 void Model::update(VulkanImpl* renderer, float dtime)
@@ -63,12 +71,17 @@ void Model::update(VulkanImpl* renderer, float dtime)
 	model.pos = glm::rotate(model.pos, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	model.pos = glm::rotate(model.pos, glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
+	//model.pos = glm::rotate(model.pos, glm::radians(-90.0f) * (time/2.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
 	//TODO: Don't update the GPU-local memory here, just the staging buffer.
 	renderer->updateUniform("model", (void*)&model, sizeof(model), renderer->getAlignedRange(sizeof(model)) * _index);
+	renderer->updateUniform("material", (void*)&_materialUniform, sizeof(_materialUniform), renderer->getAlignedRange(sizeof(_materialUniform)) * _index);
 }
 
 void Model::_load(VulkanImpl* renderer)
 {
+	assert(sizeof(MaterialUniform) <= renderer->properties().limits.maxUniformBufferRange);
+
 	_loadModel(renderer);
 
 	//TODO: override default shaders if custom shaders are present in the model dir
@@ -78,42 +91,46 @@ void Model::_load(VulkanImpl* renderer)
 	_pipeline = renderer->getPipelineForShader("shaders/common/model");
 	_shadowPipeline = renderer->getPipelineForShader("shaders/common/shadowmap", true);
 
-	//Vertex buffer
+	//TODO: fix allocation inefficiencies
+	for (Shape& s : _shapes)
 	{
-		size_t size = (_vertices.size() * sizeof(Vertex));
-		VkBufferCreateInfo info = {};
-		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		info.size = size;
+		//Vertex buffer
+		{
+			size_t size = (s.vertices.size() * sizeof(Vertex));
+			VkBufferCreateInfo info = {};
+			info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			info.size = size;
 
-		Buffer staging;
-		renderer->createAndBindBuffer(info, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		staging.copyData((void*)_vertices.data(), size);
+			Buffer staging;
+			renderer->createAndBindBuffer(info, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			staging.copyData((void*)s.vertices.data(), size);
 
-		info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-		renderer->createAndBindBuffer(info, _vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			renderer->createAndBindBuffer(info, s.vertexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-		renderer->copyBuffer(_vertexBuffer, staging, size);
-	}
+			renderer->copyBuffer(s.vertexBuffer, staging, size);
+		}
 
-	//Index buffer
-	{
-		size_t size = (_indices.size() * sizeof(uint32_t));
-		VkBufferCreateInfo info = {};
-		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		info.size = size;
+		//Index buffer
+		{
+			size_t size = (s.indices.size() * sizeof(uint32_t));
+			VkBufferCreateInfo info = {};
+			info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			info.size = size;
 
-		Buffer staging;
-		renderer->createAndBindBuffer(info, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		staging.copyData((void*)_indices.data(), size);
+			Buffer staging;
+			renderer->createAndBindBuffer(info, staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			staging.copyData((void*)s.indices.data(), size);
 
-		info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-		renderer->createAndBindBuffer(info, _indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+			renderer->createAndBindBuffer(info, s.indexBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-		renderer->copyBuffer(_indexBuffer, staging, size);
+			renderer->copyBuffer(s.indexBuffer, staging, size);
+		}
 	}
 }
 
@@ -211,23 +228,23 @@ void Model::_loadModel(VulkanImpl* renderer)
 		}
 	}
 
-	//TODO: store shapes separately as each may use its own material.
-	for (const tinyobj::shape_t& shape : shapes)
+
+	_shapes.resize(shapes.size());
+	_materials.resize(materials.size());
+
+	
+	for(size_t s = 0; s < shapes.size(); ++s)
 	{
-		//TODO: rather than store this per-vertex, store the material index and the material info separately.
-		glm::vec3 diffuse(1.0f, 1.0f, 1.0f);
-		if (materials.size() && shape.mesh.material_ids.size() && shape.mesh.material_ids[0] != -1)
-		{
-			tinyobj::material_t m = materials[shape.mesh.material_ids[0]];
-			diffuse = glm::vec3(m.diffuse[0], m.diffuse[1], m.diffuse[2]);
-		}
+		const tinyobj::shape_t& shape = shapes[s];
+
+		_shapes[s].name = shape.name;
 
 		for(size_t idx = 0; idx < shape.mesh.indices.size(); idx++)
 		{
 			tinyobj::index_t i = shape.mesh.indices[idx];
 
 			Vertex vtx = {};
-			vtx.color = diffuse;
+			vtx.materialId = shape.mesh.material_ids[idx / 3];
 
 			vtx.position = {
 				attrib.vertices[3 * i.vertex_index] * scale,
@@ -256,30 +273,38 @@ void Model::_loadModel(VulkanImpl* renderer)
 				vtx.normal = normals[i.vertex_index];
 			}
 
-			_vertices.push_back(vtx);
-			_indices.push_back((uint32_t)_indices.size());
+			_shapes[s].vertices.push_back(vtx);
+			_shapes[s].indices.push_back((uint32_t)_shapes[s].indices.size());
 		}
 	}
 
-	if (materials.size())
+	for(size_t i = 0; i < materials.size(); ++i)
 	{
+		tinyobj::material_t mat = materials[i];
 		char texname[128] = { '\0' };
 
-		if(materials[0].diffuse_texname != "")
+		_materialUniform.ambient[i] = { mat.ambient[0], mat.ambient[1], mat.ambient[2], 1.0 };
+		_materialUniform.diffuse[i] = { mat.diffuse[0], mat.diffuse[1], mat.diffuse[2], 1.0 };
+		_materialUniform.specular[i] = { mat.specular[0], mat.specular[1], mat.specular[2], 1.0 };
+		_materialUniform.emissive[i] = { mat.emission[0], mat.emission[1], mat.emission[2], 1.0 };
+		_materialUniform.transparency[i] = { mat.transmittance[0], mat.transmittance[1], mat.transmittance[2], 1.0 };
+		_materialUniform.shininess[i] = mat.shininess;
+
+		if(mat.diffuse_texname != "")
 		{
-			sprintf_s(texname, "%s%s", baseDir, materials[0].diffuse_texname.c_str());
-			_diffuse = TextureCache::getTexture(texname, *renderer);
-			_diffuse->bind(renderer);
+			sprintf_s(texname, "%s%s", baseDir, mat.diffuse_texname.c_str());
+			_materials[i].diffuse = TextureCache::getTexture(texname, *renderer);
+			_materials[i].diffuse->bind(renderer);
 
 			//TODO: diffuse lazily allocates a set that we reuse; this should be elsewhere.
-			_textureSet = _diffuse->set();
+			_materials[i].textureSet = _materials[i].diffuse->set();
 		}
 
-		if (materials[0].bump_texname != "")
+		if (mat.bump_texname != "")
 		{
-			sprintf_s(texname, "%s%s", baseDir, materials[0].bump_texname.c_str());
-			_bumpMap = TextureCache::getTexture(texname, *renderer);
-			_bumpMap->bind(renderer, _textureSet, 1);
+			sprintf_s(texname, "%s%s", baseDir, mat.bump_texname.c_str());
+			_materials[i].bumpmap = TextureCache::getTexture(texname, *renderer);
+			_materials[i].bumpmap->bind(renderer, _materials[i].textureSet, 1);
 		}
 	}
 

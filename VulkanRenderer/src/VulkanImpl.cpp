@@ -19,6 +19,7 @@ VkPhysicalDevice VulkanImpl::_physicalDevice = VK_NULL_HANDLE;
 //TODO: don't hardcode this and recreate the pool if necessary
 const int MAX_TEXTURES = 64;
 const int MAX_MODELS = 64;
+const int MAX_MATERIALS = 64;
 
 VulkanImpl::VulkanImpl() : _swapChain(nullptr), _shadowMap(nullptr)
 {
@@ -202,18 +203,18 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName,
 
 	vtxAttrs[1].binding = 0;
 	vtxAttrs[1].location = 1;
-	vtxAttrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	vtxAttrs[1].offset = offsetof(Vertex, color);
+	vtxAttrs[1].format = VK_FORMAT_R32G32_SFLOAT;
+	vtxAttrs[1].offset = offsetof(Vertex, uv);
 
 	vtxAttrs[2].binding = 0;
 	vtxAttrs[2].location = 2;
-	vtxAttrs[2].format = VK_FORMAT_R32G32_SFLOAT;
-	vtxAttrs[2].offset = offsetof(Vertex, uv);
+	vtxAttrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+	vtxAttrs[2].offset = offsetof(Vertex, normal);
 
 	vtxAttrs[3].binding = 0;
 	vtxAttrs[3].location = 3;
-	vtxAttrs[3].format = VK_FORMAT_R32G32B32_SFLOAT;
-	vtxAttrs[3].offset = offsetof(Vertex, normal);
+	vtxAttrs[3].format = VK_FORMAT_R8_UINT;
+	vtxAttrs[3].offset = offsetof(Vertex, materialId);
 
 	VkPipelineVertexInputStateCreateInfo vis = {};
 	vis.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -265,6 +266,15 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName,
 
 	_pipelines[shaderName] = pipeline;
 	return _pipelines[shaderName];
+}
+
+Uniform* VulkanImpl::getUniform(const std::string& name)
+{
+	if (_uniforms.find(name) != _uniforms.end())
+		return _uniforms[name];
+
+	//TODO: return createUniform?
+	return nullptr;
 }
 
 void VulkanImpl::init(const Window& window)
@@ -547,8 +557,8 @@ void VulkanImpl::_createDescriptorSets()
 	sizes[2].descriptorCount = MAX_TEXTURES + 2;
 	sizes[2].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 
-	//Model data
-	sizes[3].descriptorCount = 1;
+	//Model & material data
+	sizes[3].descriptorCount = 2 + MAX_MATERIALS;
 	sizes[3].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 
 	VkDescriptorPoolCreateInfo pool = {};
@@ -644,6 +654,27 @@ void VulkanImpl::_createDescriptorSets()
 
 		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
 	}
+
+	{
+		size_t range = getAlignedRange(sizeof(MaterialUniform));
+
+		VkDescriptorBufferInfo buff = {};
+		Uniform* uniform = createUniform("material", range * MAX_MODELS);
+		buff.buffer = uniform->localBuffer.buffer;
+		buff.offset = 0;
+		buff.range = range;
+
+
+		VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+		write.descriptorCount = 1;
+		write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		write.dstSet = _descriptorSets[SET_BINDING_MATERIAL];
+		write.dstBinding = 0;
+		write.dstArrayElement = 0;
+		write.pBufferInfo = &buff;
+
+		vkUpdateDescriptorSets(VulkanImpl::device(), 1, &write, 0, nullptr);
+	}
 }
 
 void VulkanImpl::_createInstance()
@@ -698,19 +729,19 @@ void VulkanImpl::_createLayouts()
 		info.bindingCount = 1;
 		info.pBindings = bindings;
 
-		VkDescriptorSetLayout layouts[SET_BINDING_COUNT];
+		_descriptorLayouts.resize(SET_BINDING_COUNT);
 
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[0]));
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_CAMERA]));
 
 		info.bindingCount = 1;
 		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[1]));
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_MODEL]));
 
 		info.bindingCount = 1;
 		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
 		bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 		bindings[0].descriptorCount = 1;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[2]));
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_SAMPLER]));
 
 		info.bindingCount = 2;
 		bindings[0].binding = 0;
@@ -719,23 +750,20 @@ void VulkanImpl::_createLayouts()
 		bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 		bindings[1].descriptorCount = 1;
 		bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[3]));
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_TEXTURE]));
 
 		info.bindingCount = 1;
 		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[4]));
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_LIGHTS]));
 
 		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 		bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &layouts[5]));
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_SHADOW]));
 
-		_descriptorLayouts.push_back(layouts[0]);
-		_descriptorLayouts.push_back(layouts[1]);
-		_descriptorLayouts.push_back(layouts[2]);
-		_descriptorLayouts.push_back(layouts[3]);
-		_descriptorLayouts.push_back(layouts[4]);
-		_descriptorLayouts.push_back(layouts[5]);
+		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		bindings[0].descriptorCount = 1;
+		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_MATERIAL]));
 
 		VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 		layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

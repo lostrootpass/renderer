@@ -9,6 +9,7 @@ typedef enum SetBinding
 	SET_BINDING_TEXTURE,
 	SET_BINDING_LIGHTS,
 	SET_BINDING_SHADOW,
+	SET_BINDING_MATERIAL,
 	SET_BINDING_COUNT //Always have this be last.
 } SetBinding;
 

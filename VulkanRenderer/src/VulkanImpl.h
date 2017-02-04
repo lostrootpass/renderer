@@ -58,6 +58,8 @@ public:
 
 	const VkPipeline getPipelineForShader(const std::string& shaderName, bool useOffscreenLayout = false);
 
+	Uniform* getUniform(const std::string& name);
+
 	void init(const Window& window);
 
 	void recordCommandBuffers(const Scene* scene = 0);
@@ -117,6 +119,11 @@ public:
 	inline const VkQueue presentQueue() const
 	{
 		return _presentQueue.vkQueue;
+	}
+
+	inline const VkPhysicalDeviceProperties properties() const
+	{
+		return _physicalProperties;
 	}
 
 	inline const VkRenderPass renderPass() const
