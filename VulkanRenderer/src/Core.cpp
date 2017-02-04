@@ -63,6 +63,14 @@ void Core::_pollEvents()
 		case SDL_QUIT:
 			_running = false;
 			break;
+		case SDL_WINDOWEVENT:
+			if (e.window.event == SDL_WINDOWEVENT_RESIZED)
+			{
+				_scene->resize(e.window.data1, e.window.data2);
+				_renderer->recreateSwapChain(e.window.data1, e.window.data2);
+				_renderer->recordCommandBuffers(_scene);
+			}
+			break;
 		}
 	}
 }

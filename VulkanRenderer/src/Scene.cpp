@@ -52,6 +52,11 @@ void Scene::drawShadow(VkCommandBuffer cmd) const
 	}
 }
 
+void Scene::resize(uint32_t width, uint32_t height)
+{
+	_camera->updateViewport(width, height);
+}
+
 void Scene::update(float dtime)
 {
 	_camera->update(dtime);

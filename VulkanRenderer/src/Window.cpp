@@ -40,5 +40,5 @@ void Window::createSurface(const VkInstance vkInstance, VkSurfaceKHR* vkSurface)
 
 void Window::open()
 {
-	_sdlWindow = SDL_CreateWindow(TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
+	_sdlWindow = SDL_CreateWindow(TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_RESIZABLE);
 }

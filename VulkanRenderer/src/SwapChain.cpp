@@ -4,52 +4,24 @@
 #undef max
 
 SwapChain::SwapChain(VulkanImpl& vkImpl)
-	: _vkSwapchain(VK_NULL_HANDLE), _impl(&vkImpl), _device(_impl->device())
+	: _vkSwapchain(VK_NULL_HANDLE), _surface(VK_NULL_HANDLE), _impl(&vkImpl)
 {
 	_populateSwapChainInfo();
 }
 
 SwapChain::~SwapChain()
 {
-	vkDestroySemaphore(_device, _imageAvailableSemaphore, nullptr);
-	vkDestroySemaphore(_device, _renderingFinishedSemaphore, nullptr);
-
-	vkDestroyImageView(VulkanImpl::device(), _depthView, nullptr);
-	vkDestroyImage(VulkanImpl::device(), _depthImage, nullptr);
-	vkFreeMemory(VulkanImpl::device(), _depthMemory, nullptr);
-
-	for (VkFramebuffer fb : _framebuffers)
-	{
-		vkDestroyFramebuffer(_device, fb, nullptr);
-	}
-
-	for (VkImageView view : _imageViews)
-	{
-		vkDestroyImageView(_device, view, nullptr);
-	}
+	_cleanup();
 
 	if (_vkSwapchain != VK_NULL_HANDLE)
-		vkDestroySwapchainKHR(_device, _vkSwapchain, nullptr);
+		vkDestroySwapchainKHR(VulkanImpl::device(), _vkSwapchain, nullptr);
 }
 
-void SwapChain::init(VkSwapchainCreateInfoKHR& info)
+void SwapChain::init(VkSurfaceKHR surface)
 {
-	if (_vkSwapchain != VK_NULL_HANDLE)
-	{
-		info.oldSwapchain = _vkSwapchain;
-	}
+	_surface = surface;
 
-	//Keep existing swap chain around until after the new one is created
-	VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
-	VkCheck(vkCreateSwapchainKHR(_device, &info, nullptr, &newSwapchain));
-
-	if (_vkSwapchain != VK_NULL_HANDLE)
-	{
-		vkDestroySwapchainKHR(_device, _vkSwapchain, nullptr);
-	}
-
-	_vkSwapchain = newSwapchain;
-
+	_createSwapChain();
 	_createImageViews();
 	_createDepthBuffer();
 	_createFramebuffers();
@@ -59,7 +31,7 @@ void SwapChain::init(VkSwapchainCreateInfoKHR& info)
 void SwapChain::present()
 {
 	uint32_t idx;
-	VkCheck(vkAcquireNextImageKHR(_device, _vkSwapchain, std::numeric_limits<uint64_t>::max(), _imageAvailableSemaphore, VK_NULL_HANDLE, &idx));
+	VkCheck(vkAcquireNextImageKHR(VulkanImpl::device(), _vkSwapchain, std::numeric_limits<uint64_t>::max(), _imageAvailableSemaphore, VK_NULL_HANDLE, &idx));
 
 	VkSemaphore semaphores[] = { _imageAvailableSemaphore };
 	VkSemaphore signals[] = { _renderingFinishedSemaphore };
@@ -88,6 +60,40 @@ void SwapChain::present()
 	presentInfo.pImageIndices = &idx;
 
 	VkCheck(vkQueuePresentKHR(_impl->presentQueue(), &presentInfo));
+}
+
+void SwapChain::resize(uint32_t width, uint32_t height)
+{
+	_populateSwapChainInfo();
+	_cleanup();
+
+	_createSwapChain();
+	_createImageViews();
+	_createDepthBuffer();
+	_createFramebuffers();
+	_createSemaphores();
+}
+
+void SwapChain::_cleanup()
+{
+	vkDestroySemaphore(VulkanImpl::device(), _imageAvailableSemaphore, nullptr);
+	vkDestroySemaphore(VulkanImpl::device(), _renderingFinishedSemaphore, nullptr);
+
+	vkDestroyImageView(VulkanImpl::device(), _depthView, nullptr);
+	vkDestroyImage(VulkanImpl::device(), _depthImage, nullptr);
+	vkFreeMemory(VulkanImpl::device(), _depthMemory, nullptr);
+
+	for (VkFramebuffer fb : _framebuffers)
+	{
+		vkDestroyFramebuffer(VulkanImpl::device(), fb, nullptr);
+	}
+	_framebuffers.clear();
+
+	for (VkImageView view : _imageViews)
+	{
+		vkDestroyImageView(VulkanImpl::device(), view, nullptr);
+	}
+	_imageViews.clear();
 }
 
 void SwapChain::_createDepthBuffer()
@@ -154,7 +160,7 @@ void SwapChain::_createFramebuffers()
 		
 
 		VkFramebuffer framebuffer;
-		VkCheck(vkCreateFramebuffer(_impl->device(), &info, nullptr, &framebuffer));
+		VkCheck(vkCreateFramebuffer(VulkanImpl::device(), &info, nullptr, &framebuffer));
 
 		_framebuffers.push_back(framebuffer);
 	}
@@ -163,9 +169,9 @@ void SwapChain::_createFramebuffers()
 void SwapChain::_createImageViews()
 {
 	uint32_t imageCount;
-	VkCheck(vkGetSwapchainImagesKHR(_device, _vkSwapchain, &imageCount, nullptr));
+	VkCheck(vkGetSwapchainImagesKHR(VulkanImpl::device(), _vkSwapchain, &imageCount, nullptr));
 	_images.resize(imageCount);
-	VkCheck(vkGetSwapchainImagesKHR(_device, _vkSwapchain, &imageCount, _images.data()));
+	VkCheck(vkGetSwapchainImagesKHR(VulkanImpl::device(), _vkSwapchain, &imageCount, _images.data()));
 
 	for (VkImage image : _images)
 	{
@@ -187,7 +193,7 @@ void SwapChain::_createImageViews()
 		info.subresourceRange.layerCount = 1;
 
 		VkImageView view;
-		VkCheck(vkCreateImageView(_device, &info, nullptr, &view));
+		VkCheck(vkCreateImageView(VulkanImpl::device(), &info, nullptr, &view));
 
 		_imageViews.push_back(view);
 	}
@@ -198,8 +204,55 @@ void SwapChain::_createSemaphores()
 	VkSemaphoreCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	
-	VkCheck(vkCreateSemaphore(_device, &info, nullptr, &_imageAvailableSemaphore));
-	VkCheck(vkCreateSemaphore(_device, &info, nullptr, &_renderingFinishedSemaphore));
+	VkCheck(vkCreateSemaphore(VulkanImpl::device(), &info, nullptr, &_imageAvailableSemaphore));
+	VkCheck(vkCreateSemaphore(VulkanImpl::device(), &info, nullptr, &_renderingFinishedSemaphore));
+}
+
+void SwapChain::_createSwapChain()
+{
+	//TODO: pass these in from VulkanImpl.
+	//uint32_t indices[] = { _graphicsQueue.index, _presentQueue.index };
+	VkSurfaceCapabilitiesKHR caps = _swapChainInfo.surfaceCapabilities;
+	VkSwapchainCreateInfoKHR info = { VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
+	info.clipped = VK_TRUE;
+	info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	info.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+	info.surface = _surface;
+	info.imageArrayLayers = 1;
+	info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	info.minImageCount = caps.minImageCount;
+	info.imageExtent.width = caps.currentExtent.width;
+	info.imageExtent.height = caps.currentExtent.height;
+	info.preTransform = caps.currentTransform;
+	info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+
+	//if (indices[0] == indices[1])
+	{
+		info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	}
+	//else
+	//{
+	//	info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+	//	info.queueFamilyIndexCount = 2;
+	//	info.pQueueFamilyIndices = indices;
+	//}
+
+	if (_vkSwapchain != VK_NULL_HANDLE)
+	{
+		info.oldSwapchain = _vkSwapchain;
+	}
+
+	//Keep existing swap chain around until after the new one is created
+	VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
+	VkCheck(vkCreateSwapchainKHR(VulkanImpl::device(), &info, nullptr, &newSwapchain));
+
+	if (_vkSwapchain != VK_NULL_HANDLE)
+	{
+		vkDestroySwapchainKHR(VulkanImpl::device(), _vkSwapchain, nullptr);
+	}
+
+	_vkSwapchain = newSwapchain;
 }
 
 void SwapChain::_populateSwapChainInfo()

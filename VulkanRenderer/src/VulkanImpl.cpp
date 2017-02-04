@@ -137,6 +137,7 @@ uint32_t VulkanImpl::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags fla
 	return -1;
 }
 
+//TODO: get rid of useOffscreenLayout parameter
 const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName, bool useOffscreenLayout)
 {
 	if (_pipelines.find(shaderName) != _pipelines.end())
@@ -221,19 +222,9 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName,
 	vis.vertexAttributeDescriptionCount = VTX_ATTR_COUNT;
 	vis.pVertexAttributeDescriptions = vtxAttrs;
 
-	VkExtent2D extent;
-	if (useOffscreenLayout)
-		extent = { 1024, 1024 };
-	else
-		extent = _swapChain->surfaceCapabilities().currentExtent;
-
-	VkRect2D sc = { 0, 0, extent.width, extent.height };
-
+	//Set dynamically.
+	VkRect2D sc = {};
 	VkViewport vp = {};
-	vp.width = (float)extent.width;
-	vp.height = (float)extent.height;
-	vp.minDepth = 0.0f;
-	vp.maxDepth = 1.0f;
 
 	VkPipelineViewportStateCreateInfo vps = {};
 	vps.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -247,6 +238,12 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName,
 	dss.depthTestEnable = VK_TRUE;
 	dss.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	dss.depthWriteEnable = VK_TRUE;
+
+	VkDynamicState dynStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+	VkPipelineDynamicStateCreateInfo dys = {};
+	dys.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dys.dynamicStateCount = 2;
+	dys.pDynamicStates = dynStates;
 
 	VkGraphicsPipelineCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -262,6 +259,7 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName,
 	info.pVertexInputState = &vis;
 	info.pViewportState = &vps;
 	info.pDepthStencilState = &dss;
+	info.pDynamicState = &dys;
 
 	VkCheck(vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline));
 
@@ -295,9 +293,10 @@ void VulkanImpl::init(const Window& window)
 void VulkanImpl::recordCommandBuffers(const Scene* scene)
 {
 	const std::vector<VkFramebuffer> framebuffers = _swapChain->framebuffers();
+	const VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
 
 	VkClearValue clearValues[] = {
-		{ 0.0f, 0.0f, 0.0f, 1.0f }, //Clear color
+		{ 0.0f, 0.0f, 0.2f, 1.0f }, //Clear color
 		{ 1.0f, 0.0f } //Depth stencil
 	};
 
@@ -315,13 +314,19 @@ void VulkanImpl::recordCommandBuffers(const Scene* scene)
 		info.pClearValues = clearValues;
 		info.renderPass = _renderPass;
 		info.renderArea.offset = { 0, 0 };
-		info.renderArea.extent = _swapChain->surfaceCapabilities().currentExtent;
+		info.renderArea.extent = extent;
 		info.framebuffer = framebuffers[i];
 
 		VkCheck(vkBeginCommandBuffer(buffer, &beginInfo));
 
 		if(_shadowMap)
 			_shadowMap->render(buffer, scene);
+
+		VkViewport viewport = { 0, 0, (float)extent.width, (float)extent.height, 0.0f, 1.0f };
+		VkRect2D scissor = { 0, 0, extent.width, extent.height };
+
+		vkCmdSetViewport(buffer, 0, 1, &viewport);
+		vkCmdSetScissor(buffer, 0, 1, &scissor);
 
 		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -335,6 +340,12 @@ void VulkanImpl::recordCommandBuffers(const Scene* scene)
 
 		VkCheck(vkEndCommandBuffer(buffer));
 	}
+}
+
+void VulkanImpl::recreateSwapChain(uint32_t width, uint32_t height)
+{
+	vkDeviceWaitIdle(_device);
+	_swapChain->resize(width, height);
 }
 
 void VulkanImpl::render()
@@ -840,37 +851,8 @@ void VulkanImpl::_createSampler()
 
 void VulkanImpl::_createSwapChain()
 {
-	uint32_t indices[] = { _graphicsQueue.index, _presentQueue.index };
 	_swapChain = new SwapChain(*this);
-	VkSurfaceCapabilitiesKHR caps = _swapChain->surfaceCapabilities();
-
-	VkSwapchainCreateInfoKHR info = {};
-	info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	info.clipped = VK_TRUE;
-	info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	info.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
-	info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	info.surface = _surface;
-	info.imageArrayLayers = 1;
-	info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	info.minImageCount = caps.minImageCount;
-	info.imageExtent.width = caps.currentExtent.width;
-	info.imageExtent.height = caps.currentExtent.height;
-	info.preTransform = caps.currentTransform;
-	info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-
-	if (indices[0] == indices[1])
-	{
-		info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	}
-	else
-	{
-		info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-		info.queueFamilyIndexCount = 2;
-		info.pQueueFamilyIndices = indices;
-	}
-
-	_swapChain->init(info);
+	_swapChain->init(_surface);
 	_extent = _swapChain->surfaceCapabilities().currentExtent;
 }
 

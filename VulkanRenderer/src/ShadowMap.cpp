@@ -29,6 +29,12 @@ void ShadowMap::render(VkCommandBuffer cmd, const Scene* scene) const
 	info.renderArea.extent = { SHADOW_DIM, SHADOW_DIM };
 	info.framebuffer = _framebuffer;
 
+	VkViewport viewport = { 0, 0, (float)SHADOW_DIM, (float)SHADOW_DIM, 0.0f, 1.0f };
+	VkRect2D scissor = { 0, 0, SHADOW_DIM, SHADOW_DIM };
+
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
 	vkCmdBeginRenderPass(cmd, &info, VK_SUBPASS_CONTENTS_INLINE);
 
 	if (scene)

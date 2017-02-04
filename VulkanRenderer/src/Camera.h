@@ -67,7 +67,8 @@ private:
 	void _reset()
 	{
 		_eye = glm::vec3(-8.0f, 0.0f, 2.0f);
-		lookAt(glm::vec3(0.0f, 0.0f, 2.0f));
+		//_eye = glm::vec3(-3.0f, 0.0f, 0.0f);
+		lookAt(glm::vec3(0.0f, 0.0f, 0.0f));
 	}
 };
 

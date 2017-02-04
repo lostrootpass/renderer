@@ -20,8 +20,11 @@ public:
 	SwapChain(SwapChain&&) = delete;
 	~SwapChain();
 
-	void init(VkSwapchainCreateInfoKHR& info);
+	void init(VkSurfaceKHR surface);
+
 	void present();
+	
+	void resize(uint32_t width, uint32_t height);
 
 	inline const VkSurfaceCapabilitiesKHR& surfaceCapabilities() const
 	{
@@ -50,7 +53,7 @@ private:
 	VulkanImpl* _impl;
 
 	VkSwapchainKHR _vkSwapchain;
-	VkDevice _device;
+	VkSurfaceKHR _surface;
 
 	VkImage _depthImage;
 	VkDeviceMemory _depthMemory;
@@ -61,10 +64,12 @@ private:
 
 	SwapChainInfo _swapChainInfo;
 
+	void _cleanup();
 	void _createDepthBuffer();
 	void _createFramebuffers();
 	void _createImageViews();
 	void _createSemaphores();
+	void _createSwapChain();
 	void _populateSwapChainInfo();
 };
 

@@ -62,6 +62,8 @@ public:
 
 	void recordCommandBuffers(const Scene* scene = 0);
 
+	void recreateSwapChain(uint32_t width, uint32_t height);
+
 	void render();
 
 	void setImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange& range) const;

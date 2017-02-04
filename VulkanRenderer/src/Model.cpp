@@ -135,14 +135,17 @@ void Model::_loadModel(VulkanImpl* renderer)
 	
 	const float scale = 1.0f;
 
-	glm::vec3* normals = new glm::vec3[attrib.vertices.size()];
-	std::vector<glm::vec3>* faceNormals = new std::vector<glm::vec3>[attrib.vertices.size()];
-
-	const bool perVertexNormals = true;
+	glm::vec3* normals = nullptr;
+	std::vector<glm::vec3>* faceNormals = nullptr;
 
 	//TODO: this approach is quite slow and could be optimised.
 	if (!attrib.normals.size())
 	{
+		normals = new glm::vec3[attrib.vertices.size()];
+		faceNormals = new std::vector<glm::vec3>[attrib.vertices.size()];
+
+		const bool perVertexNormals = true;
+
 		//First pass: calculate face normals.
 		for (const tinyobj::shape_t& shape : shapes)
 		{
@@ -208,6 +211,7 @@ void Model::_loadModel(VulkanImpl* renderer)
 		}
 	}
 
+	//TODO: store shapes separately as each may use its own material.
 	for (const tinyobj::shape_t& shape : shapes)
 	{
 		//TODO: rather than store this per-vertex, store the material index and the material info separately.
