@@ -21,9 +21,10 @@ Scene::~Scene()
 	delete _camera;
 }
 
-void Scene::addModel(const std::string& name)
+void Scene::addModel(const std::string& name, float scale)
 {
 	Model* model = new Model(name, _renderer);
+	model->setScale(scale);
 	_models.push_back(model);
 	
 	//We've changed the scene and need to update the command buffers to reflect that.
@@ -76,19 +77,6 @@ void Scene::_init()
 	_camera = new Camera(extent.width, extent.height);
 	glm::mat4 projView = _camera->projectionViewMatrix();
 	_renderer->updateUniform("camera", (void*)&projView, sizeof(projView));
-
-
-	//Test data
-
-	//addModel("cube");
-	//addModel("cube2");
-	//addModel("ground");
-	//_models[0]->setPosition(glm::vec3(0.0f, -1.5f, 1.0f));
-	//_models[0]->setScale(2.0f);
-	//_models[1]->setPosition(glm::vec3(0.0f, 1.5f, 1.0f));
-
-	addModel("head");
-	_models[0]->setScale(10.0f);
 
 	Light light;
 	light.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);

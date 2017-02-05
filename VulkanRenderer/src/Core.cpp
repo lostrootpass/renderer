@@ -19,9 +19,15 @@ Core::~Core()
 	_shutdown();
 }
 
-void Core::run()
+void Core::run(int argc, char** argv)
 {
 	_init();
+
+	if (argc > 1) //argv[0] on win32 is exe path
+	{
+		const float scale = (argc > 2 ? strtof(argv[2], 0) : 1.0f);
+		_scene->addModel(argv[1], scale);
+	}
 
 	std::chrono::time_point<std::chrono::steady_clock> now = Clock::now();
 	std::chrono::duration<float> dtime;

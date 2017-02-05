@@ -12,7 +12,7 @@ public:
 	Core();
 	~Core();
 
-	void run();
+	void run(int argc, char** argv);
 
 private:
 	Renderer* _renderer;

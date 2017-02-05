@@ -14,7 +14,7 @@ public:
 	Scene(VulkanImpl& renderer);
 	~Scene();
 
-	void addModel(const std::string& name);
+	void addModel(const std::string& name, float scale = 1.0f);
 
 	void draw(VkCommandBuffer cmd) const;
 
