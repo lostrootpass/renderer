@@ -24,14 +24,12 @@ public:
 
 	void lookAt(const glm::vec3& point)
 	{
-		_lookAt = point;
+		//
 	}
 
-	void move(const glm::vec3& moveBy)
-	{
-		_eye += moveBy;
-		lookAt(_lookAt + moveBy);
-	}
+	void mouseMove(int dx, int dy);
+
+	void move(const glm::vec3& moveBy);
 
 	glm::mat4 projectionViewMatrix() const
 	{
@@ -50,25 +48,32 @@ public:
 
 	glm::mat4 viewMatrix() const
 	{
-		glm::mat4 viewMatrix = glm::lookAt(_eye, _lookAt, glm::vec3(0.0f, 0.0f, 1.0f));
-
-		return viewMatrix;
+		return _orientation * _translation;
 	}
 
 private:
-	glm::vec3 _eye;
-	glm::vec3 _lookAt;
+	glm::mat4 _translation;
+	glm::mat4 _orientation;
+	glm::quat _rotation;
 
 	float _fov;
 	float _aspectRatio;
 	float _nearClip;
 	float _farClip;
 
+	void _adjustView(float yaw = 0.0f, float pitch = 0.0f);
+
 	void _reset()
 	{
-		_eye = glm::vec3(-8.0f, 0.0f, 2.0f);
-		//_eye = glm::vec3(-3.0f, 0.0f, 0.0f);
-		lookAt(glm::vec3(0.0f, 0.0f, 0.0f));
+		//Reset translation to origin.
+		_translation = glm::mat4();
+
+		//Point the camera pointing along the positive X-axis.
+		_rotation = glm::quat();
+		_rotation = glm::rotate(_rotation, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		_rotation = glm::rotate(_rotation, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+		_orientation = glm::mat4_cast(glm::normalize(_rotation));
 	}
 };
 

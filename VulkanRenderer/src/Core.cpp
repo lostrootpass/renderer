@@ -77,6 +77,14 @@ void Core::_pollEvents()
 				_renderer->recordCommandBuffers(_scene);
 			}
 			break;
+		case SDL_MOUSEMOTION:
+			//TODO: have mouse motion & input be handled better.
+			_scene->mouseMove(e.motion.xrel, e.motion.yrel);
+			break;
+		case SDL_MOUSEBUTTONDOWN:
+		case SDL_MOUSEBUTTONUP:
+			SDL_SetRelativeMouseMode((SDL_bool)(e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT));
+			break;
 		}
 	}
 }

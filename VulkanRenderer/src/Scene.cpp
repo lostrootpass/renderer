@@ -26,7 +26,6 @@ void Scene::addModel(const std::string& name, float scale)
 	Model* model = new Model(name, _renderer);
 	model->setScale(scale);
 	_models.push_back(model);
-	
 	//We've changed the scene and need to update the command buffers to reflect that.
 	_renderer->recordCommandBuffers(this);
 }
@@ -51,6 +50,11 @@ void Scene::drawShadow(VkCommandBuffer cmd) const
 	{
 		model->drawShadow(_renderer, cmd);
 	}
+}
+
+void Scene::mouseMove(int dx, int dy)
+{
+	_camera->mouseMove(dx, dy);
 }
 
 void Scene::resize(uint32_t width, uint32_t height)

@@ -20,6 +20,8 @@ public:
 
 	void drawShadow(VkCommandBuffer cmd) const;
 
+	void mouseMove(int dx, int dy);
+
 	void resize(uint32_t width, uint32_t height);
 
 	void update(float dtime);
