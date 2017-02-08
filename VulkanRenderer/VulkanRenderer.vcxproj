@@ -138,8 +138,9 @@
     <ClCompile Include="src\ShaderCache.cpp" />
     <ClCompile Include="src\ShadowMap.cpp" />
     <ClCompile Include="src\SwapChain.cpp" />
-    <ClCompile Include="src\Texture.cpp" />
-    <ClCompile Include="src\TextureCache.cpp" />
+    <ClCompile Include="src\texture\Texture.cpp" />
+    <ClCompile Include="src\texture\TextureArray.cpp" />
+    <ClCompile Include="src\texture\TextureCache.cpp" />
     <ClCompile Include="src\VulkanImpl.cpp" />
     <ClCompile Include="src\VulkanUtil.cpp" />
     <ClCompile Include="src\Window.cpp" />
@@ -156,8 +157,9 @@
     <ClInclude Include="src\ShaderCache.h" />
     <ClInclude Include="src\ShadowMap.h" />
     <ClInclude Include="src\SwapChain.h" />
-    <ClInclude Include="src\Texture.h" />
-    <ClInclude Include="src\TextureCache.h" />
+    <ClInclude Include="src\texture\Texture.h" />
+    <ClInclude Include="src\texture\TextureArray.h" />
+    <ClInclude Include="src\texture\TextureCache.h" />
     <ClInclude Include="src\VulkanImpl.h" />
     <ClInclude Include="src\VulkanUtil.h" />
     <ClInclude Include="src\Window.h" />

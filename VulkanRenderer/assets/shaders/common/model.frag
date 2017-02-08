@@ -1,6 +1,8 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+const int materialCount = 64;
+
 layout(location = 0) in vec2 uv;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec3 lightVec;
@@ -10,8 +12,7 @@ layout(location = 4) flat in uint materialId;
 layout(location = 0) out vec4 fragColor;
 
 layout(set = 2, binding = 0) uniform sampler texsampler;
-layout(set = 3, binding = 0) uniform texture2D diffusemap;
-layout(set = 3, binding = 1) uniform texture2D bumpmap;
+layout(set = 3, binding = 0) uniform texture2DArray materials[materialCount];
 layout(set = 4, binding = 0) uniform LightData {
     mat4 mvp;
     vec4 color;
@@ -19,40 +20,38 @@ layout(set = 4, binding = 0) uniform LightData {
 } lightData;
 layout(set = 5, binding = 0) uniform texture2D shadowMap;
 
-const int materialCount = 64;
-layout(std140, set = 6, binding = 0) uniform Material {
+layout(std140, set = 6, binding = 0) uniform MaterialData {
     vec4 ambient[materialCount];
     vec4 diffuse[materialCount];
     vec4 specular[materialCount];
     vec4 emissive[materialCount];
     vec4 transparency[materialCount];
     float shininess[materialCount];
-} materials;
+} materialData;
 
-//TODO: these should be uniforms.
+//TODO: these should be uniforms or push constants
 const bool modelSpaceMapSplit = false;
 const bool enableLighting = true;
-const bool useBumpMapping = true;
+const bool useBumpMapping = false;
 const bool enableShadowing = false;
 const float bumpMapIntensity = 1.0;
 
 void main() {
     vec4 coord = shadowCoord/ shadowCoord.w;
 
-    vec4 ambient = materials.ambient[materialId];
-    vec4 diffuse = materials.diffuse[materialId];
-    vec4 specular = materials.specular[materialId];
-	vec4 emissive = materials.emissive[materialId];
-    vec4 transparency = materials.transparency[materialId];
+    vec4 ambient = materialData.ambient[materialId];
+    vec4 diffuse = materialData.diffuse[materialId];
+    vec4 specular = materialData.specular[materialId];
+	vec4 emissive = materialData.emissive[materialId];
+    vec4 transparency = materialData.transparency[materialId];
 
-
-    diffuse = texture(sampler2D(diffusemap, texsampler), uv);
+    diffuse *= texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, 0));
     ambient = diffuse * 0.2;
 
     float bump = 0.5;
     if(useBumpMapping)
     {
-        bump = texture(sampler2D(bumpmap, texsampler), uv).r;
+        bump = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, 1)).r;
     }
 
     if(modelSpaceMapSplit && useBumpMapping)
@@ -73,12 +72,10 @@ void main() {
         vec3 adjustedNormal = normal;
 	    adjustedNormal += ((bump - 0.5) * bumpMapIntensity);
 
-        // vec3 color = ambient.xyz + emissive.xyz + (diffuse.xyz * (lightData.color.rgb * clamp(dot(normalize(lightVec), adjustedNormal), 0.0, 1.0)));
-        // color *= shadowValue;
-        vec3 color = ambient.xyz + (diffuse.xyz * (lightData.color.rgb * clamp(dot(normalize(lightVec), adjustedNormal), 0.0, 1.0)));
+        vec3 color = ambient.xyz + emissive.xyz + (diffuse.xyz * (lightData.color.rgb * clamp(dot(normalize(lightVec), adjustedNormal), 0.0, 1.0)));
         color *= shadowValue;
-	    
-        fragColor = vec4(color, transparency.x);
+
+        fragColor = vec4(color, 1.0);
     }
     else
     {

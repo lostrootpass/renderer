@@ -1,6 +1,6 @@
 #include "ShadowMap.h"
 #include "Scene.h"
-#include "Texture.h"
+#include "texture/Texture.h"
 
 const uint32_t SHADOW_DIM = 1024;
 const VkFormat SHADOW_MAP_FORMAT = VK_FORMAT_D32_SFLOAT;

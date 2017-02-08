@@ -1,6 +1,6 @@
 #include "Model.h"
 #include "VulkanImpl.h"
-#include "TextureCache.h"
+#include "texture/TextureCache.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -19,6 +19,8 @@ Model::Model(const std::string& name, VulkanImpl* renderer)
 
 Model::~Model()
 {
+	for (TextureArray* a : _materials)
+		delete a;
 }
 
 void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
@@ -28,12 +30,15 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 	std::vector<uint32_t> descOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(ModelUniform))*_index};
 	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
 
-	std::vector<uint32_t> matOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(MaterialUniform))*_index};
+	std::vector<uint32_t> matOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(MaterialData))*_index};
 	renderer->bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
 
-	if(_materials.size() && _materials[0].textureSet)
-		renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, _materials[0].textureSet);
-	
+	for (TextureArray* m : _materials)
+	{
+		if(m && m->set())
+			renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, m->set());
+	}
+
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 
 	//TODO: copy whatever is in the Staging Buffer to GPU local memory
@@ -75,12 +80,12 @@ void Model::update(VulkanImpl* renderer, float dtime)
 
 	//TODO: Don't update the GPU-local memory here, just the staging buffer.
 	renderer->updateUniform("model", (void*)&model, sizeof(model), renderer->getAlignedRange(sizeof(model)) * _index);
-	renderer->updateUniform("material", (void*)&_materialUniform, sizeof(_materialUniform), renderer->getAlignedRange(sizeof(_materialUniform)) * _index);
+	renderer->updateUniform("material", (void*)&_materialData, sizeof(_materialData), renderer->getAlignedRange(sizeof(_materialData)) * _index);
 }
 
 void Model::_load(VulkanImpl* renderer)
 {
-	assert(sizeof(MaterialUniform) <= renderer->properties().limits.maxUniformBufferRange);
+	assert(sizeof(MaterialData) <= renderer->properties().limits.maxUniformBufferRange);
 
 	_loadModel(renderer);
 
@@ -91,7 +96,7 @@ void Model::_load(VulkanImpl* renderer)
 	_pipeline = renderer->getPipelineForShader("shaders/common/model");
 	_shadowPipeline = renderer->getPipelineForShader("shaders/common/shadowmap", true);
 
-	//TODO: fix allocation inefficiencies
+	//TODO: fix allocation inefficiencies - use one big buffer instead of lots of small ones.
 	for (Shape& s : _shapes)
 	{
 		//Vertex buffer
@@ -154,6 +159,7 @@ void Model::_loadModel(VulkanImpl* renderer)
 
 	glm::vec3* normals = nullptr;
 	std::vector<glm::vec3>* faceNormals = nullptr;
+	//attrib.normals.clear();
 
 	//TODO: this approach is quite slow and could be optimised.
 	if (!attrib.normals.size())
@@ -258,6 +264,9 @@ void Model::_loadModel(VulkanImpl* renderer)
 					attrib.texcoords[2 * i.texcoord_index],
 					1.0 - attrib.texcoords[2 * i.texcoord_index + 1]
 				};
+
+				//assert(vtx.uv.x >= 0.0f && vtx.uv.x <= 1.0f);
+				//assert(vtx.uv.y >= 0.0f && vtx.uv.y <= 1.0f);
 			}
 
 			if (attrib.normals.size())
@@ -273,6 +282,7 @@ void Model::_loadModel(VulkanImpl* renderer)
 				vtx.normal = normals[i.vertex_index];
 			}
 
+			//TODO: these can be cleaned up after being copied to the GPU
 			_shapes[s].vertices.push_back(vtx);
 			_shapes[s].indices.push_back((uint32_t)_shapes[s].indices.size());
 		}
@@ -283,29 +293,53 @@ void Model::_loadModel(VulkanImpl* renderer)
 		tinyobj::material_t mat = materials[i];
 		char texname[128] = { '\0' };
 
-		_materialUniform.ambient[i] = { mat.ambient[0], mat.ambient[1], mat.ambient[2], 1.0 };
-		_materialUniform.diffuse[i] = { mat.diffuse[0], mat.diffuse[1], mat.diffuse[2], 1.0 };
-		_materialUniform.specular[i] = { mat.specular[0], mat.specular[1], mat.specular[2], 1.0 };
-		_materialUniform.emissive[i] = { mat.emission[0], mat.emission[1], mat.emission[2], 1.0 };
-		_materialUniform.transparency[i] = { mat.transmittance[0], mat.transmittance[1], mat.transmittance[2], 1.0 };
-		_materialUniform.shininess[i] = mat.shininess;
+		_materialData.ambient[i] = { mat.ambient[0], mat.ambient[1], mat.ambient[2], 1.0 };
+		_materialData.diffuse[i] = { mat.diffuse[0], mat.diffuse[1], mat.diffuse[2], 1.0 };
+		_materialData.specular[i] = { mat.specular[0], mat.specular[1], mat.specular[2], 1.0 };
+		_materialData.emissive[i] = { mat.emission[0], mat.emission[1], mat.emission[2], 1.0 };
+		_materialData.transparency[i] = { mat.transmittance[0], mat.transmittance[1], mat.transmittance[2], 1.0 };
+		_materialData.shininess[i] = mat.shininess;
+
+		std::vector<std::string> paths;
 
 		if(mat.diffuse_texname != "")
 		{
 			sprintf_s(texname, "%s%s", baseDir, mat.diffuse_texname.c_str());
-			_materials[i].diffuse = TextureCache::getTexture(texname, *renderer);
-			_materials[i].diffuse->bind(renderer);
-
-			//TODO: diffuse lazily allocates a set that we reuse; this should be elsewhere.
-			_materials[i].textureSet = _materials[i].diffuse->set();
+			paths.push_back(texname);
 		}
 
 		if (mat.bump_texname != "")
 		{
 			sprintf_s(texname, "%s%s", baseDir, mat.bump_texname.c_str());
-			_materials[i].bumpmap = TextureCache::getTexture(texname, *renderer);
-			_materials[i].bumpmap->bind(renderer, _materials[i].textureSet, 1);
+			paths.push_back(texname);
 		}
+
+		if (mat.specular_texname != "")
+		{
+			sprintf_s(texname, "%s%s", baseDir, mat.specular_texname.c_str());
+			paths.push_back(texname);
+		}
+
+		if (paths.size())
+		{
+			//TODO: it's possible a texture array already exists for this material
+			// could locate & reuse instead of reallocating
+			_materials[i] = new TextureArray(paths, renderer);
+			if (!_materialSet) _materialSet = &(_materials[i]->set());
+			_materials[i]->load(renderer);
+			_materials[i]->bind(renderer, *_materialSet, 0, (uint32_t)i);
+		}
+		else
+			_materials[i] = nullptr;
+	}
+
+
+	//TODO: the validation layer warning that arises from not doing this is basically safe to ignore
+	//however in the interest of keeping the output clean we do this here. Maybe there is a better way?
+	for (size_t i = 0; i < 64; i++)
+	{
+		if(i >= _materials.size() || _materials[i] == nullptr)
+			_materials[0]->unbind(renderer, *_materialSet, 0, (uint32_t)i);
 	}
 
 	delete[] normals;

@@ -39,13 +39,7 @@
     <ClCompile Include="src\Scene.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\Texture.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\Buffer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\TextureCache.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\VulkanUtil.cpp">
@@ -55,6 +49,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\ShadowMap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\texture\Texture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\texture\TextureArray.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\texture\TextureCache.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -83,13 +86,7 @@
     <ClInclude Include="src\Camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\Texture.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\Buffer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\TextureCache.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\Light.h">
@@ -105,6 +102,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\SetBinding.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\texture\Texture.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\texture\TextureArray.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\texture\TextureCache.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

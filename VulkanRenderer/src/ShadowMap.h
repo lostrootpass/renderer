@@ -2,7 +2,7 @@
 #define SHADOW_MAP_H_
 
 #include "VulkanImpl.h"
-#include "Texture.h"
+#include "texture/Texture.h"
 
 class ShadowMap
 {

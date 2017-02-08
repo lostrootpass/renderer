@@ -1,7 +1,7 @@
 #include "VulkanImpl.h"
 #include "SwapChain.h"
 #include "ShaderCache.h"
-#include "TextureCache.h"
+#include "texture/TextureCache.h"
 #include "Model.h"
 #include "Camera.h"
 #include "Scene.h"
@@ -554,7 +554,7 @@ void VulkanImpl::_createDescriptorSets()
 	sizes[1].type = VK_DESCRIPTOR_TYPE_SAMPLER;
 
 	//Textures
-	sizes[2].descriptorCount = MAX_TEXTURES + 2;
+	sizes[2].descriptorCount = MAX_TEXTURES * MAX_MATERIALS + 2;
 	sizes[2].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 
 	//Model & material data
@@ -656,7 +656,7 @@ void VulkanImpl::_createDescriptorSets()
 	}
 
 	{
-		size_t range = getAlignedRange(sizeof(MaterialUniform));
+		size_t range = getAlignedRange(sizeof(MaterialData));
 
 		VkDescriptorBufferInfo buff = {};
 		Uniform* uniform = createUniform("material", range * MAX_MODELS);
@@ -743,17 +743,15 @@ void VulkanImpl::_createLayouts()
 		bindings[0].descriptorCount = 1;
 		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_SAMPLER]));
 
-		info.bindingCount = 2;
+		info.bindingCount = 1;
 		bindings[0].binding = 0;
 		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		bindings[1].binding = 1;
-		bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		bindings[1].descriptorCount = 1;
-		bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		bindings[0].descriptorCount = MAX_MATERIALS;
 		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_TEXTURE]));
 
 		info.bindingCount = 1;
 		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		bindings[0].descriptorCount = 1;
 		bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
 		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_LIGHTS]));
 
@@ -861,9 +859,9 @@ void VulkanImpl::_createSampler()
 	samplerInfo.anisotropyEnable = VK_TRUE;
 	samplerInfo.maxAnisotropy = 16;
 
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
 	samplerInfo.compareEnable = VK_FALSE;
 	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
