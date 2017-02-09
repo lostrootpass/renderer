@@ -298,7 +298,8 @@ void Model::_loadModel(VulkanImpl* renderer)
 		_materialData.specular[i] = { mat.specular[0], mat.specular[1], mat.specular[2], 1.0 };
 		_materialData.emissive[i] = { mat.emission[0], mat.emission[1], mat.emission[2], 1.0 };
 		_materialData.transparency[i] = { mat.transmittance[0], mat.transmittance[1], mat.transmittance[2], 1.0 };
-		_materialData.shininess[i] = mat.shininess;
+		_materialData.shininess[i][0] = mat.shininess;
+		_materialData.flags[i][0] = 0;
 
 		std::vector<std::string> paths;
 
@@ -306,18 +307,21 @@ void Model::_loadModel(VulkanImpl* renderer)
 		{
 			sprintf_s(texname, "%s%s", baseDir, mat.diffuse_texname.c_str());
 			paths.push_back(texname);
+			_materialData.flags[i][0] |= MATFLAG_DIFFUSEMAP;
 		}
 
 		if (mat.bump_texname != "")
 		{
 			sprintf_s(texname, "%s%s", baseDir, mat.bump_texname.c_str());
 			paths.push_back(texname);
+			_materialData.flags[i][0] |= MATFLAG_BUMPMAP;
 		}
 
 		if (mat.specular_texname != "")
 		{
 			sprintf_s(texname, "%s%s", baseDir, mat.specular_texname.c_str());
 			paths.push_back(texname);
+			_materialData.flags[i][0] |= MATFLAG_SPECMAP;
 		}
 
 		if (paths.size())

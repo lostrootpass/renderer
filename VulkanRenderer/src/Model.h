@@ -31,7 +31,17 @@ struct MaterialData
 	glm::vec4 specular[INDICES];
 	glm::vec4 emissive[INDICES];
 	glm::vec4 transparency[INDICES];
-	float shininess[INDICES];
+	uint32_t flags[INDICES][4];
+	float shininess[INDICES][4];
+};
+
+enum MatFlags
+{
+	MATFLAG_DIFFUSEMAP = 0x0001,
+	MATFLAG_BUMPMAP = 0x0002,
+	MATFLAG_SPECMAP = 0x0004,
+	MATFLAG_NORMALMAP = 0x0008,
+	MATFLAG_PRELIT = 0x0010
 };
 
 struct Shape

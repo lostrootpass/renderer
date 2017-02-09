@@ -3,6 +3,17 @@
 
 const int materialCount = 64;
 
+const uint MATFLAG_DIFFUSEMAP = 0x0001;
+const uint MATFLAG_BUMPMAP = 0x0002;
+const uint MATFLAG_SPECMAP = 0x0004;
+const uint MATFLAG_NORMALMAP = 0x0008;
+const uint MATFLAG_PRELIT = 0x0010;
+
+const uint SCENEFLAG_ENABLESHADOWS = 0x0001;
+const uint SCENEFLAG_PRELIT = 0x0002;
+const uint SCENEFLAG_ENABLEBUMPMAPS = 0x0004;
+const uint SCENEFLAG_MAPSPLIT = 0x0008;
+
 layout(location = 0) in vec2 uv;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec3 lightVec;
@@ -26,15 +37,31 @@ layout(std140, set = 6, binding = 0) uniform MaterialData {
     vec4 specular[materialCount];
     vec4 emissive[materialCount];
     vec4 transparency[materialCount];
+    uint flags[materialCount];
     float shininess[materialCount];
 } materialData;
 
-//TODO: these should be uniforms or push constants
-const bool modelSpaceMapSplit = false;
-const bool enableLighting = true;
-const bool useBumpMapping = false;
-const bool enableShadowing = false;
+layout(push_constant) uniform SceneFlags {
+    uint flags;
+} sceneFlags;
+
+//TODO: pass this in with material data.
 const float bumpMapIntensity = 1.0;
+
+bool flag(uint set, uint mask)
+{
+    return (set & mask) == mask;
+}
+
+bool sceneFlag(uint mask)
+{
+    return flag(sceneFlags.flags, mask);
+}
+
+bool matFlag(uint mask)
+{
+    return flag(materialData.flags[materialId], mask);
+}
 
 void main() {
     vec4 coord = shadowCoord/ shadowCoord.w;
@@ -45,7 +72,11 @@ void main() {
 	vec4 emissive = materialData.emissive[materialId];
     vec4 transparency = materialData.transparency[materialId];
 
-    diffuse *= texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, 0));
+    const bool useBumpMapping = matFlag(MATFLAG_BUMPMAP) && sceneFlag(SCENEFLAG_ENABLEBUMPMAPS);
+
+    if(matFlag(MATFLAG_DIFFUSEMAP))
+        diffuse = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, 0));
+
     ambient = diffuse * 0.2;
 
     float bump = 0.5;
@@ -54,7 +85,7 @@ void main() {
         bump = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, 1)).r;
     }
 
-    if(modelSpaceMapSplit && useBumpMapping)
+    if(useBumpMapping && sceneFlag(SCENEFLAG_MAPSPLIT))
     {
         if(uv.x > 0.5)
             diffuse = vec4(bump);
@@ -63,10 +94,14 @@ void main() {
     vec4 shadow = texture(sampler2D(shadowMap, texsampler), coord.xy);
 
     float shadowValue = 1.0;
-    if(coord.z > shadow.z && enableShadowing)
+    if(coord.z > shadow.z && sceneFlag(SCENEFLAG_ENABLESHADOWS))
         shadowValue = 0.3;
 
-    if(enableLighting)
+    if(sceneFlag(SCENEFLAG_PRELIT) || matFlag(MATFLAG_PRELIT))
+    {
+        fragColor = diffuse;
+    }
+    else
     {
         //TODO: improve lighting and fix shading on curved surfaces
         vec3 adjustedNormal = normal;
@@ -76,9 +111,5 @@ void main() {
         color *= shadowValue;
 
         fragColor = vec4(color, 1.0);
-    }
-    else
-    {
-        fragColor = diffuse;
     }
 }

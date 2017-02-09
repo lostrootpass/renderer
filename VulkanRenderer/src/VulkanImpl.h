@@ -74,6 +74,8 @@ public:
 
 	void submitOneShotCmdBuffer(VkCommandBuffer buffer) const;
 
+	void updatePushConstants(VkCommandBuffer buffer, size_t size, void* data) const;
+
 	void updateSampledImage(VkImageView view) const;
 
 	void updateUniform(const std::string& name, void* data, size_t size, size_t offset = 0);

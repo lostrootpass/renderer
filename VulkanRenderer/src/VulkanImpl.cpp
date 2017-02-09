@@ -302,6 +302,9 @@ void VulkanImpl::init(const Window& window)
 
 void VulkanImpl::recordCommandBuffers(const Scene* scene)
 {
+	//TODO: use fences properly instead
+	vkDeviceWaitIdle(_device);
+
 	const std::vector<VkFramebuffer> framebuffers = _swapChain->framebuffers();
 	const VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
 
@@ -432,6 +435,11 @@ void VulkanImpl::submitOneShotCmdBuffer(VkCommandBuffer buffer) const
 	VkCheck(vkQueueWaitIdle(_graphicsQueue.vkQueue));
 
 	vkFreeCommandBuffers(_device, _commandPool, 1, &buffer);
+}
+
+void VulkanImpl::updatePushConstants(VkCommandBuffer buffer, size_t size, void* data) const
+{
+	vkCmdPushConstants(buffer, _pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)size, data);
 }
 
 void VulkanImpl::updateSampledImage(VkImageView view) const
@@ -763,10 +771,17 @@ void VulkanImpl::_createLayouts()
 		bindings[0].descriptorCount = 1;
 		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_MATERIAL]));
 
+		VkPushConstantRange pushConstants;
+		pushConstants.offset = 0;
+		pushConstants.size = sizeof(uint32_t);
+		pushConstants.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
 		VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 		layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		layoutCreateInfo.pSetLayouts = _descriptorLayouts.data();
 		layoutCreateInfo.setLayoutCount = (uint32_t)_descriptorLayouts.size();
+		layoutCreateInfo.pushConstantRangeCount = 1;
+		layoutCreateInfo.pPushConstantRanges = &pushConstants;
 
 		VkCheck(vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout));
 

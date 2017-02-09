@@ -5,6 +5,8 @@
 #include "VulkanImpl.h"
 #include "Light.h"
 
+#include <SDL_keyboard.h>
+
 class Camera;
 class Model;
 
@@ -20,6 +22,8 @@ public:
 
 	void drawShadow(VkCommandBuffer cmd) const;
 
+	void keyDown(SDL_Keycode key);
+
 	void mouseMove(int dx, int dy);
 
 	void resize(uint32_t width, uint32_t height);
@@ -32,6 +36,8 @@ private:
 
 	VulkanImpl* _renderer;
 	Camera* _camera;
+
+	uint32_t _sceneFlags;
 
 	void _init();
 

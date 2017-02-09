@@ -85,6 +85,9 @@ void Core::_pollEvents()
 		case SDL_MOUSEBUTTONUP:
 			SDL_SetRelativeMouseMode((SDL_bool)(e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_RIGHT));
 			break;
+		case SDL_KEYDOWN:
+			_scene->keyDown(e.key.keysym.sym);
+			break;
 		}
 	}
 }
