@@ -48,9 +48,13 @@ public:
 
 	void copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset = 0) const;
 
+	void clearShaderCache();
+
 	void createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buffer, VkMemoryPropertyFlags flags) const;
 
 	Uniform* createUniform(const std::string& name, size_t size, size_t range = 0);
+
+	void destroyPipelines();
 
 	size_t getAlignedRange(size_t needed) const;
 

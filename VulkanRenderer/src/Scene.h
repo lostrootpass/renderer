@@ -41,6 +41,8 @@ private:
 
 	void _init();
 
+	void _reload();
+
 	void _setLightPos(const glm::vec3& pos);
 };
 

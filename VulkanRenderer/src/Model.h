@@ -70,6 +70,8 @@ public:
 
 	void drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd);
 
+	void reload(VulkanImpl* renderer);
+
 	void update(VulkanImpl*, float dtime);
 
 	inline const std::string& name() const

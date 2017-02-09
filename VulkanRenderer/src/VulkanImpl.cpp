@@ -69,6 +69,11 @@ void VulkanImpl::copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize s
 	submitOneShotCmdBuffer(buffer);
 }
 
+void VulkanImpl::clearShaderCache()
+{
+	ShaderCache::clear();
+}
+
 void VulkanImpl::createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buffer, VkMemoryPropertyFlags flags) const
 {
 	VkMemoryRequirements memReq;
@@ -111,6 +116,18 @@ Uniform* VulkanImpl::createUniform(const std::string& name, size_t size, size_t 
 	createAndBindBuffer(info, uniform->localBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	return uniform;
+}
+
+void VulkanImpl::destroyPipelines()
+{
+	vkDeviceWaitIdle(_device);
+
+	for (auto pair : _pipelines)
+	{
+		vkDestroyPipeline(_device, pair.second, nullptr);
+	}
+
+	_pipelines.clear();
 }
 
 size_t VulkanImpl::getAlignedRange(size_t needed) const
@@ -499,15 +516,10 @@ void VulkanImpl::_cleanup()
 	vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
 
 	vkDestroySampler(_device, _sampler, nullptr);
-	ShaderCache::shutdown();
+	ShaderCache::clear();
 	TextureCache::shutdown();
 
-	for (auto pair : _pipelines)
-	{
-		vkDestroyPipeline(_device, pair.second, nullptr);
-	}
-
-	_pipelines.clear();
+	destroyPipelines();
 
 	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
 	vkDestroyPipelineLayout(_device, _offscreenLayout, nullptr);

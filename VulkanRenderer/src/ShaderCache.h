@@ -29,7 +29,7 @@ struct ShaderCache final
 		return _moduleCache[shaderName];
 	}
 
-	static void shutdown()
+	static void clear()
 	{
 		for (auto pair : _moduleCache)
 		{

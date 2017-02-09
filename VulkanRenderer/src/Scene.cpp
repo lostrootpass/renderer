@@ -96,6 +96,9 @@ void Scene::keyDown(SDL_Keycode key)
 		_lights[0].mvp = _camera->projectionViewMatrix();
 		_renderer->updateUniform("light", (void*)&_lights[0], sizeof(_lights[0]));
 		break;
+	case SDLK_F5:
+		_reload();
+		break;
 	}
 
 	if(flags != _sceneFlags)
@@ -138,6 +141,19 @@ void Scene::_init()
 	_setLightPos(glm::vec3(-8.0f, 4.0f, 2.0f));
 
 	_sceneFlags = SCENEFLAG_ENABLEBUMPMAPS | SCENEFLAG_ENABLESHADOWS | SCENEFLAG_ENABLESPECMAPS;
+}
+
+void Scene::_reload()
+{
+	_renderer->clearShaderCache();
+	_renderer->destroyPipelines();
+
+	for (Model* m : _models)
+	{
+		m->reload(_renderer);
+	}
+
+	_renderer->recordCommandBuffers(this);
 }
 
 void Scene::_setLightPos(const glm::vec3& pos)

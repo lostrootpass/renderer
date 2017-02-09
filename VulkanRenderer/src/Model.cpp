@@ -68,6 +68,12 @@ void Model::drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd)
 	}
 }
 
+void Model::reload(VulkanImpl* renderer)
+{
+	_pipeline = renderer->getPipelineForShader("shaders/common/model");
+	_shadowPipeline = renderer->getPipelineForShader("shaders/common/shadowmap", true);
+}
+
 void Model::update(VulkanImpl* renderer, float dtime)
 {
 	static float time = 0;
