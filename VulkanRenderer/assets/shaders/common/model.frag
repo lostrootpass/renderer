@@ -86,16 +86,16 @@ void main() {
 
     ambient = diffuse * 0.2;
 
-    float bump = 0.5;
+    vec3 bump = vec3(0.5);
     if(useBumpMapping)
     {
-        bump = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, TEXLAYER_BUMP)).b;
+        bump = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, TEXLAYER_BUMP)).rgb;
     }
 
     if(useBumpMapping && sceneFlag(SCENEFLAG_MAPSPLIT))
     {
         if(uv.x > 0.5)
-            diffuse = vec4(bump);
+            diffuse = vec4(bump, 1.0);
     }
     
     vec4 shadow = texture(sampler2D(shadowMap, texsampler), coord.xy);
@@ -126,7 +126,7 @@ void main() {
             //     exponent *= materialData.shininess[materialId];
 
             float specAngle = max(0.0, dot(normalize(reflect(-lightVec, adjustedNormal)), normalize(viewVec)));
-            specComponent = diffuse.xyz * max(0.0, pow(specAngle, exponent));
+            specComponent = ambient.xyz * max(0.0, pow(specAngle, exponent));
         }
 
         vec3 color = ambient.xyz + emissive.xyz + specComponent + (diffuse.xyz * (lightData.color.rgb * clamp(dot(normalize(lightVec), adjustedNormal), 0.0, 1.0)));
