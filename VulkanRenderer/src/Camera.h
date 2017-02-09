@@ -12,6 +12,12 @@ const float DEFAULT_FOV = 60.0f;
 const float DEFAULT_CLIP_NEAR = 0.1f;
 const float DEFAULT_CLIP_FAR = 100.0f;
 
+struct CameraUniform
+{
+	glm::mat4 projView;
+	glm::vec4 pos;
+};
+
 class Camera
 {
 public:
@@ -41,12 +47,17 @@ public:
 
 	void update(float dtime);
 
-	void updateViewport(uint32_t viewportWidth, uint32_t viewportHeight)
+	inline glm::vec4 eye() const
+	{
+		return -_translation[3];
+	}
+
+	inline void updateViewport(uint32_t viewportWidth, uint32_t viewportHeight)
 	{
 		_aspectRatio = (viewportWidth / (float)viewportHeight);
 	}
 
-	glm::mat4 viewMatrix() const
+	inline glm::mat4 viewMatrix() const
 	{
 		return _orientation * _translation;
 	}

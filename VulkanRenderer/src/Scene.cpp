@@ -8,7 +8,9 @@ enum SceneFlags
 	SCENEFLAG_ENABLESHADOWS = 0x0001,
 	SCENEFLAG_PRELIT = 0x0002,
 	SCENEFLAG_ENABLEBUMPMAPS = 0x0004,
-	SCENEFLAG_MAPSPLIT = 0x0008
+	SCENEFLAG_MAPSPLIT = 0x0008,
+	SCENEFLAG_SHOWNORMALS = 0x0010,
+	SCENEFLAG_ENABLESPECMAPS = 0x0020
 };
 
 Scene::Scene(VulkanImpl& renderer) : _camera(nullptr), _renderer(&renderer)
@@ -76,11 +78,23 @@ void Scene::keyDown(SDL_Keycode key)
 	case SDLK_b:
 		_sceneFlags ^= SCENEFLAG_ENABLEBUMPMAPS;
 		break;
-	case SDLK_l:
+	case SDLK_F2:
 		_sceneFlags ^= SCENEFLAG_ENABLESHADOWS;
 		break;
 	case SDLK_m:
 		_sceneFlags ^= SCENEFLAG_MAPSPLIT;
+		break;
+	case SDLK_n:
+		_sceneFlags ^= SCENEFLAG_SHOWNORMALS;
+		break;
+	case SDLK_F1:
+		_sceneFlags ^= SCENEFLAG_ENABLESPECMAPS;
+		break;
+	//A hacky way of getting the light to move to a specific position. TODO: fix.
+	case SDLK_l:
+		_lights[0].pos = _camera->eye();
+		_lights[0].mvp = _camera->projectionViewMatrix();
+		_renderer->updateUniform("light", (void*)&_lights[0], sizeof(_lights[0]));
 		break;
 	}
 
@@ -101,9 +115,9 @@ void Scene::resize(uint32_t width, uint32_t height)
 void Scene::update(float dtime)
 {
 	_camera->update(dtime);
-	glm::mat4 projView = _camera->projectionViewMatrix();
-	_renderer->updateUniform("camera", (void*)&projView, sizeof(projView));
-	//_setLightPos(_lights[0].pos + (glm::vec3(0.0f, -1.0f * dtime, 0.0f)));
+	CameraUniform camera = { _camera->projectionViewMatrix(), _camera->eye() };
+	_renderer->updateUniform("camera", (void*)&camera, sizeof(camera));
+	//_setLightPos(_lights[0].pos + (glm::vec3(-1.0f * dtime, 0.0f, 0.0f)));
 
 	for (Model* model : _models)
 	{
@@ -115,15 +129,15 @@ void Scene::_init()
 {
 	VkExtent2D extent = _renderer->extent();
 	_camera = new Camera(extent.width, extent.height);
-	glm::mat4 projView = _camera->projectionViewMatrix();
-	_renderer->updateUniform("camera", (void*)&projView, sizeof(projView));
+	CameraUniform camera = { _camera->projectionViewMatrix(), _camera->eye() };
+	_renderer->updateUniform("camera", (void*)&camera, sizeof(camera));
 
 	Light light;
 	light.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 	_lights.push_back(light);
 	_setLightPos(glm::vec3(-8.0f, 4.0f, 2.0f));
 
-	_sceneFlags = SCENEFLAG_ENABLEBUMPMAPS | SCENEFLAG_ENABLESHADOWS;
+	_sceneFlags = SCENEFLAG_ENABLEBUMPMAPS | SCENEFLAG_ENABLESHADOWS | SCENEFLAG_ENABLESPECMAPS;
 }
 
 void Scene::_setLightPos(const glm::vec3& pos)

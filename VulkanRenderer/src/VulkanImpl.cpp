@@ -589,7 +589,7 @@ void VulkanImpl::_createDescriptorSets()
 
 	{
 		VkDescriptorBufferInfo buff = {};
-		Uniform* uniform = createUniform("camera", sizeof(glm::mat4));
+		Uniform* uniform = createUniform("camera", sizeof(CameraUniform));
 		buff.buffer = uniform->localBuffer.buffer;
 		buff.offset = 0;
 		buff.range = uniform->size;

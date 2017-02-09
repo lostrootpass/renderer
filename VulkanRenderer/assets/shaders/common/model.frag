@@ -9,16 +9,23 @@ const uint MATFLAG_SPECMAP = 0x0004;
 const uint MATFLAG_NORMALMAP = 0x0008;
 const uint MATFLAG_PRELIT = 0x0010;
 
+const uint TEXLAYER_DIFFUSE = 0;
+const uint TEXLAYER_BUMP = 1;
+const uint TEXLAYER_SPEC = 2;
+
 const uint SCENEFLAG_ENABLESHADOWS = 0x0001;
 const uint SCENEFLAG_PRELIT = 0x0002;
 const uint SCENEFLAG_ENABLEBUMPMAPS = 0x0004;
 const uint SCENEFLAG_MAPSPLIT = 0x0008;
+const uint SCENEFLAG_SHOWNORMALS = 0x0010;
+const uint SCENEFLAG_ENABLESPECMAPS = 0x0020;
 
 layout(location = 0) in vec2 uv;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec3 lightVec;
-layout(location = 3) in vec4 shadowCoord;
-layout(location = 4) flat in uint materialId;
+layout(location = 3) in vec3 viewVec;
+layout(location = 4) in vec4 shadowCoord;
+layout(location = 5) flat in uint materialId;
 
 layout(location = 0) out vec4 fragColor;
 
@@ -75,14 +82,14 @@ void main() {
     const bool useBumpMapping = matFlag(MATFLAG_BUMPMAP) && sceneFlag(SCENEFLAG_ENABLEBUMPMAPS);
 
     if(matFlag(MATFLAG_DIFFUSEMAP))
-        diffuse = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, 0));
+        diffuse = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, TEXLAYER_DIFFUSE));
 
     ambient = diffuse * 0.2;
 
     float bump = 0.5;
     if(useBumpMapping)
     {
-        bump = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, 1)).r;
+        bump = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, TEXLAYER_BUMP)).b;
     }
 
     if(useBumpMapping && sceneFlag(SCENEFLAG_MAPSPLIT))
@@ -97,17 +104,32 @@ void main() {
     if(coord.z > shadow.z && sceneFlag(SCENEFLAG_ENABLESHADOWS))
         shadowValue = 0.3;
 
+    //TODO: improve lighting and fix shading on curved surfaces
+    vec3 adjustedNormal = normal;
+    adjustedNormal += ((bump - 0.5) * bumpMapIntensity);
+
     if(sceneFlag(SCENEFLAG_PRELIT) || matFlag(MATFLAG_PRELIT))
     {
         fragColor = diffuse;
     }
+    else if(sceneFlag(SCENEFLAG_SHOWNORMALS))
+    {
+        fragColor = vec4(adjustedNormal, 1.0);
+    }
     else
     {
-        //TODO: improve lighting and fix shading on curved surfaces
-        vec3 adjustedNormal = normal;
-	    adjustedNormal += ((bump - 0.5) * bumpMapIntensity);
+        vec3 specComponent = vec3(0.0f);
+        if(matFlag(MATFLAG_SPECMAP) && sceneFlag(SCENEFLAG_ENABLESPECMAPS))
+        {
+            float exponent = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, TEXLAYER_SPEC)).r;
+            // if(materialData.shininess[materialId] > 0.0)
+            //     exponent *= materialData.shininess[materialId];
 
-        vec3 color = ambient.xyz + emissive.xyz + (diffuse.xyz * (lightData.color.rgb * clamp(dot(normalize(lightVec), adjustedNormal), 0.0, 1.0)));
+            float specAngle = max(0.0, dot(normalize(reflect(-lightVec, adjustedNormal)), normalize(viewVec)));
+            specComponent = diffuse.xyz * max(0.0, pow(specAngle, exponent));
+        }
+
+        vec3 color = ambient.xyz + emissive.xyz + specComponent + (diffuse.xyz * (lightData.color.rgb * clamp(dot(normalize(lightVec), adjustedNormal), 0.0, 1.0)));
         color *= shadowValue;
 
         fragColor = vec4(color, 1.0);

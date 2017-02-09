@@ -303,12 +303,14 @@ void Model::_loadModel(VulkanImpl* renderer)
 
 		std::vector<std::string> paths;
 
-		if(mat.diffuse_texname != "")
+		if (mat.diffuse_texname != "")
 		{
 			sprintf_s(texname, "%s%s", baseDir, mat.diffuse_texname.c_str());
 			paths.push_back(texname);
 			_materialData.flags[i][0] |= MATFLAG_DIFFUSEMAP;
 		}
+		else
+			paths.push_back("");
 
 		if (mat.bump_texname != "")
 		{
@@ -316,6 +318,8 @@ void Model::_loadModel(VulkanImpl* renderer)
 			paths.push_back(texname);
 			_materialData.flags[i][0] |= MATFLAG_BUMPMAP;
 		}
+		else
+			paths.push_back("");
 
 		if (mat.specular_texname != "")
 		{
@@ -323,8 +327,10 @@ void Model::_loadModel(VulkanImpl* renderer)
 			paths.push_back(texname);
 			_materialData.flags[i][0] |= MATFLAG_SPECMAP;
 		}
+		else
+			paths.push_back("");
 
-		if (paths.size())
+		if (_materialData.flags[i][0] != 0)
 		{
 			//TODO: it's possible a texture array already exists for this material
 			// could locate & reuse instead of reallocating
@@ -342,7 +348,7 @@ void Model::_loadModel(VulkanImpl* renderer)
 	//however in the interest of keeping the output clean we do this here. Maybe there is a better way?
 	for (size_t i = 0; i < 64; i++)
 	{
-		if(i >= _materials.size() || _materials[i] == nullptr)
+		if((i >= _materials.size() || _materials[i] == nullptr) && _materials[0])
 			_materials[0]->unbind(renderer, *_materialSet, 0, (uint32_t)i);
 	}
 

@@ -22,6 +22,9 @@ void TextureArray::_createImage(VulkanImpl* renderer, VkImageCreateInfo& info)
 	
 	for (std::string& p : _paths)
 	{
+		if (p == "")
+			continue;
+
 		//TODO: more graceful error handling.
 		assert(stbi_info(p.c_str(), (int*)&width, (int*)&height, &channels));
 
@@ -50,10 +53,20 @@ void TextureArray::_createImage(VulkanImpl* renderer, VkImageCreateInfo& info)
 	stbi_uc* tex;
 	for (size_t i = 0; i < _paths.size(); ++i)
 	{
-		tex = stbi_load(_paths[i].c_str(), (int*)&width, (int*)&height, &channels, STBI_rgb_alpha);
-		VkDeviceSize copySize = width * height * 4;
-		_staging.copyData((void*)tex, copySize, stride * i);
-		stbi_image_free(tex);
+		if (_paths[i] != "")
+		{
+			tex = stbi_load(_paths[i].c_str(), (int*)&width, (int*)&height, &channels, STBI_rgb_alpha);
+			VkDeviceSize copySize = width * height * 4;
+			_staging.copyData((void*)tex, copySize, stride * i);
+			stbi_image_free(tex);
+		}
+		else
+		{
+			//Empty image; assume stride length;
+			//TODO: could pack this tighter.
+			width = _width;
+			height = _height;
+		}
 
 		VkExtent3D extent = { width, height, 1 };
 		_extents.push_back(extent);
