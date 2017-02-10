@@ -327,9 +327,9 @@ void Model::_loadModel(VulkanImpl* renderer)
 		else
 			paths.push_back("");
 
-		if (mat.specular_texname != "")
+		if (mat.specular_highlight_texname != "")
 		{
-			sprintf_s(texname, "%s%s", baseDir, mat.specular_texname.c_str());
+			sprintf_s(texname, "%s%s", baseDir, mat.specular_highlight_texname.c_str());
 			paths.push_back(texname);
 			_materialData.flags[i][0] |= MATFLAG_SPECMAP;
 		}
