@@ -10,7 +10,7 @@
 //};
 
 #ifndef NDEBUG
-#define VkCheck(x) VulkanUtil::VkCheck(x)
+#define VkCheck(x) VulkanUtil::CheckResult(x)
 #else
 #define VkCheck(x) (x)
 #endif
@@ -54,7 +54,7 @@ struct VulkanUtil
 		return VK_FALSE;
 	}
 
-	static void VkCheck(VkResult res)
+	static void CheckResult(VkResult res)
 	{
 		assert(res == VK_SUCCESS);
 	}
