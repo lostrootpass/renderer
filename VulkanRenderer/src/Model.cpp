@@ -54,8 +54,19 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 
 void Model::drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd)
 {
+	renderer->bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
+
 	std::vector<uint32_t> descOffsets = { (uint32_t)renderer->getAlignedRange(sizeof(ModelUniform))*_index };
-	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets, true);
+	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
+
+	std::vector<uint32_t> matOffsets = { (uint32_t)renderer->getAlignedRange(sizeof(MaterialData))*_index };
+	renderer->bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
+
+	for (TextureArray* m : _materials)
+	{
+		if (m && m->set())
+			renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, m->set());
+	}
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowPipeline);
 
@@ -294,6 +305,7 @@ void Model::_loadModel(VulkanImpl* renderer)
 		}
 	}
 
+	TextureArray* master = nullptr;
 	for(size_t i = 0; i < materials.size(); ++i)
 	{
 		tinyobj::material_t mat = materials[i];
@@ -336,12 +348,20 @@ void Model::_loadModel(VulkanImpl* renderer)
 		else
 			paths.push_back("");
 
+		if (mat.alpha_texname != "")
+		{
+			sprintf_s(texname, "%s%s", baseDir, mat.alpha_texname.c_str());
+			paths.push_back(texname);
+			_materialData.flags[i][0] |= MATFLAG_ALPHAMASK;
+		}
+
 		if (_materialData.flags[i][0] != 0)
 		{
 			//TODO: it's possible a texture array already exists for this material
 			// could locate & reuse instead of reallocating
 			_materials[i] = new TextureArray(paths, renderer);
 			if (!_materialSet) _materialSet = &(_materials[i]->set());
+			if (!master) master = _materials[i];
 			_materials[i]->load(renderer);
 			_materials[i]->bind(renderer, *_materialSet, 0, (uint32_t)i);
 		}
@@ -352,10 +372,19 @@ void Model::_loadModel(VulkanImpl* renderer)
 
 	//TODO: the validation layer warning that arises from not doing this is basically safe to ignore
 	//however in the interest of keeping the output clean we do this here. Maybe there is a better way?
+	if (!master)
+	{
+		std::vector<std::string> missing = { "assets/textures/missingtexture.png" };
+		master = new TextureArray(missing, renderer);
+		_materialSet = &(master->set());
+		master->load(renderer);
+		master->bind(renderer, *_materialSet, 0, 0);
+	}
+
 	for (size_t i = 0; i < 64; i++)
 	{
-		if((i >= _materials.size() || _materials[i] == nullptr) && _materials[0])
-			_materials[0]->unbind(renderer, *_materialSet, 0, (uint32_t)i);
+		if((i >= _materials.size() || _materials[i] == nullptr) && master)
+			master->unbind(renderer, *_materialSet, 0, (uint32_t)i);
 	}
 
 	delete[] normals;

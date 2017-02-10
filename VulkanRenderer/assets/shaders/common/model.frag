@@ -1,17 +1,19 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-const int materialCount = 64;
+const int MATERIAL_COUNT = 64;
 
 const uint MATFLAG_DIFFUSEMAP = 0x0001;
 const uint MATFLAG_BUMPMAP = 0x0002;
 const uint MATFLAG_SPECMAP = 0x0004;
 const uint MATFLAG_NORMALMAP = 0x0008;
 const uint MATFLAG_PRELIT = 0x0010;
+const uint MATFLAG_ALPHAMASK = 0x0020;
 
 const uint TEXLAYER_DIFFUSE = 0;
 const uint TEXLAYER_BUMP = 1;
 const uint TEXLAYER_SPEC = 2;
+const uint TEXLAYER_ALPHA = 3;
 
 const uint SCENEFLAG_ENABLESHADOWS = 0x0001;
 const uint SCENEFLAG_PRELIT = 0x0002;
@@ -31,7 +33,7 @@ layout(location = 5) flat in uint materialId;
 layout(location = 0) out vec4 fragColor;
 
 layout(set = 2, binding = 0) uniform sampler texsampler;
-layout(set = 3, binding = 0) uniform texture2DArray materials[materialCount];
+layout(set = 3, binding = 0) uniform texture2DArray materials[MATERIAL_COUNT];
 layout(set = 4, binding = 0) uniform LightData {
     mat4 mvp;
     vec4 color;
@@ -40,13 +42,13 @@ layout(set = 4, binding = 0) uniform LightData {
 layout(set = 5, binding = 0) uniform texture2D shadowMap;
 
 layout(std140, set = 6, binding = 0) uniform MaterialData {
-    vec4 ambient[materialCount];
-    vec4 diffuse[materialCount];
-    vec4 specular[materialCount];
-    vec4 emissive[materialCount];
-    vec4 transparency[materialCount];
-    uint flags[materialCount];
-    float shininess[materialCount];
+    vec4 ambient[MATERIAL_COUNT];
+    vec4 diffuse[MATERIAL_COUNT];
+    vec4 specular[MATERIAL_COUNT];
+    vec4 emissive[MATERIAL_COUNT];
+    vec4 transparency[MATERIAL_COUNT];
+    uint flags[MATERIAL_COUNT];
+    float shininess[MATERIAL_COUNT];
 } materialData;
 
 layout(push_constant) uniform SceneFlags {
@@ -111,6 +113,15 @@ void main() {
 	vec4 emissive = materialData.emissive[materialId];
     vec4 transparency = materialData.transparency[materialId];
 
+    //Quick check to see if we should just discard and move on.
+    if(matFlag(MATFLAG_ALPHAMASK))
+    {
+        float alpha = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, TEXLAYER_ALPHA)).r;
+
+        if(alpha < 0.1)
+            discard;
+    }
+
     const bool useBumpMapping = matFlag(MATFLAG_BUMPMAP) && sceneFlag(SCENEFLAG_ENABLEBUMPMAPS);
 
     if(matFlag(MATFLAG_DIFFUSEMAP))
@@ -154,14 +165,18 @@ void main() {
     else
     {
         vec3 specComponent = vec3(0.0f);
-        if(matFlag(MATFLAG_SPECMAP) && sceneFlag(SCENEFLAG_ENABLESPECMAPS))
+        if(sceneFlag(SCENEFLAG_ENABLESPECMAPS))
         {
-            float exponent = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, TEXLAYER_SPEC)).r;
-            // if(materialData.shininess[materialId] > 0.0)
-            //     exponent *= materialData.shininess[materialId];
+            float exponent = materialData.specular[materialId].x;
+            if(matFlag(MATFLAG_SPECMAP))
+                exponent = texture(sampler2DArray(materials[materialId], texsampler), vec3(uv, TEXLAYER_SPEC)).r;
+            
+            float mul = 1.0;
+            if(materialData.shininess[materialId] > 0.0)
+                mul = materialData.shininess[materialId];
 
             float specAngle = max(0.0, dot(normalize(reflect(-lightVec, adjustedNormal)), normalize(viewVec)));
-            specComponent = ambient.xyz * max(0.0, pow(specAngle, exponent));
+            specComponent = ambient.xyz * max(0.0, pow(specAngle * mul, exponent));
         }
 
         vec3 color = ambient.xyz + emissive.xyz + specComponent + (diffuse.xyz * (lightData.color.rgb * clamp(dot(normalize(lightVec), adjustedNormal), 0.0, 1.0)));

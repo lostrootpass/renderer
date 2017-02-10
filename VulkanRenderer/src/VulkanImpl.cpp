@@ -175,8 +175,12 @@ const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName,
 	stages[1].module = ShaderCache::getModule(shaderName + ".frag");
 
 	VkPipelineColorBlendAttachmentState cba = {};
-	cba.blendEnable = VK_FALSE;
+	cba.blendEnable = VK_TRUE;
 	cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+	cba.colorBlendOp = VK_BLEND_OP_ADD;
+	cba.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	cba.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 
 	VkPipelineColorBlendStateCreateInfo cbs = {};
 	cbs.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
