@@ -19,6 +19,7 @@ const uint SCENEFLAG_ENABLEBUMPMAPS = 0x0004;
 const uint SCENEFLAG_MAPSPLIT = 0x0008;
 const uint SCENEFLAG_SHOWNORMALS = 0x0010;
 const uint SCENEFLAG_ENABLESPECMAPS = 0x0020;
+const uint SCENEFLAG_ENABLEPCF = 0x0040;
 
 layout(location = 0) in vec2 uv;
 layout(location = 1) in vec3 normal;
@@ -70,6 +71,37 @@ bool matFlag(uint mask)
     return flag(materialData.flags[materialId], mask);
 }
 
+float sampleShadowMap(vec2 offset)
+{
+    const float SHADOW_BIAS = 0.0005;
+    vec4 coord = shadowCoord/ shadowCoord.w;
+    vec4 shadow = texture(sampler2D(shadowMap, texsampler), coord.xy + offset);
+
+    if(coord.z > shadow.z + SHADOW_BIAS && shadow.w > 0.0)
+        return 0.3;
+    else
+        return 1.0;
+}
+
+float shadowPCF()
+{
+    float shadowValue = 0.0;
+    const float SHADOW_DIM = 1024.0;
+    const int SAMPLE_COUNT = 4;
+
+    for(int x = -(SAMPLE_COUNT/2); x < (SAMPLE_COUNT/2); x++)
+    {
+        for(int y = -(SAMPLE_COUNT/2); y < (SAMPLE_COUNT/2); y++)
+        {
+            vec2 offset = vec2(x * (1.0/SHADOW_DIM), y * (1.0/SHADOW_DIM));
+            shadowValue += sampleShadowMap(offset);
+        }
+    }
+
+    shadowValue /= (SAMPLE_COUNT*SAMPLE_COUNT);
+    return shadowValue;
+}
+
 void main() {
     vec4 coord = shadowCoord/ shadowCoord.w;
 
@@ -97,12 +129,15 @@ void main() {
         if(uv.x > 0.5)
             diffuse = vec4(bump, 1.0);
     }
-    
-    vec4 shadow = texture(sampler2D(shadowMap, texsampler), coord.xy);
 
     float shadowValue = 1.0;
-    if(coord.z > shadow.z && sceneFlag(SCENEFLAG_ENABLESHADOWS))
-        shadowValue = 0.3;
+    if(sceneFlag(SCENEFLAG_ENABLESHADOWS))
+    {
+        if(sceneFlag(SCENEFLAG_ENABLEPCF))
+            shadowValue = shadowPCF();
+        else
+            shadowValue = sampleShadowMap(vec2(0.0, 0.0));
+    }
 
     //TODO: improve lighting and fix shading on curved surfaces
     vec3 adjustedNormal = normal;

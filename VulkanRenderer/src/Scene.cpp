@@ -10,7 +10,8 @@ enum SceneFlags
 	SCENEFLAG_ENABLEBUMPMAPS = 0x0004,
 	SCENEFLAG_MAPSPLIT = 0x0008,
 	SCENEFLAG_SHOWNORMALS = 0x0010,
-	SCENEFLAG_ENABLESPECMAPS = 0x0020
+	SCENEFLAG_ENABLESPECMAPS = 0x0020,
+	SCENEFLAG_ENABLEPCF = 0x0040
 };
 
 Scene::Scene(VulkanImpl& renderer) : _camera(nullptr), _renderer(&renderer)
@@ -72,14 +73,23 @@ void Scene::keyDown(SDL_Keycode key)
 
 	switch (key)
 	{
+	case SDLK_F1:
+		_sceneFlags ^= SCENEFLAG_ENABLESPECMAPS;
+		break;
+	case SDLK_F2:
+		_sceneFlags ^= SCENEFLAG_ENABLESHADOWS;
+		break;
+	case SDLK_F3:
+		_sceneFlags ^= SCENEFLAG_ENABLEPCF;
+		break;
+	case SDLK_F5:
+		_reload();
+		break;
 	case SDLK_p:
 		_sceneFlags ^= SCENEFLAG_PRELIT;
 		break;
 	case SDLK_b:
 		_sceneFlags ^= SCENEFLAG_ENABLEBUMPMAPS;
-		break;
-	case SDLK_F2:
-		_sceneFlags ^= SCENEFLAG_ENABLESHADOWS;
 		break;
 	case SDLK_m:
 		_sceneFlags ^= SCENEFLAG_MAPSPLIT;
@@ -87,17 +97,11 @@ void Scene::keyDown(SDL_Keycode key)
 	case SDLK_n:
 		_sceneFlags ^= SCENEFLAG_SHOWNORMALS;
 		break;
-	case SDLK_F1:
-		_sceneFlags ^= SCENEFLAG_ENABLESPECMAPS;
-		break;
 	//A hacky way of getting the light to move to a specific position. TODO: fix.
 	case SDLK_l:
 		_lights[0].pos = _camera->eye();
 		_lights[0].mvp = _camera->projectionViewMatrix();
 		_renderer->updateUniform("light", (void*)&_lights[0], sizeof(_lights[0]));
-		break;
-	case SDLK_F5:
-		_reload();
 		break;
 	}
 
