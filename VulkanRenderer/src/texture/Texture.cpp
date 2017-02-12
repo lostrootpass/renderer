@@ -2,18 +2,18 @@
 #include <stb_image.h>
 
 #include "Texture.h"
-#include "../VulkanImpl.h"
+#include "../Renderer.h"
 #include "TextureCache.h"
 #include "../renderpass/SceneRenderPass.h"
 
-Texture::Texture(const std::string& path, VulkanImpl* renderer)
+Texture::Texture(const std::string& path, Renderer* renderer)
 	: _path(path), _format(VK_FORMAT_R8G8B8A8_UNORM), _set(VK_NULL_HANDLE), _layers(1),
 	 _viewType(VK_IMAGE_VIEW_TYPE_2D), _width(0), _height(0)
 {
 	load(renderer);
 }
 
-Texture::Texture(uint32_t width, uint32_t height, VkFormat format, VulkanImpl* renderer) 
+Texture::Texture(uint32_t width, uint32_t height, VkFormat format, Renderer* renderer) 
 	: _path(""), _width(width), _height(height), _format(format), _layers(1),
 	_viewType(VK_IMAGE_VIEW_TYPE_2D)
 {
@@ -23,12 +23,12 @@ Texture::Texture(uint32_t width, uint32_t height, VkFormat format, VulkanImpl* r
 
 Texture::~Texture()
 {
-	vkDestroyImageView(VulkanImpl::device(), _view, nullptr);
-	vkDestroyImage(VulkanImpl::device(), _image, nullptr);
-	vkFreeMemory(VulkanImpl::device(), _memory, nullptr);
+	vkDestroyImageView(Renderer::device(), _view, nullptr);
+	vkDestroyImage(Renderer::device(), _image, nullptr);
+	vkFreeMemory(Renderer::device(), _memory, nullptr);
 }
 
-void Texture::bind(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)
+void Texture::bind(Renderer* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)
 {
 	SceneRenderPass* p = (SceneRenderPass*)(renderer->getRenderPass(RenderPassType::SCENE));
 
@@ -43,7 +43,7 @@ void Texture::bind(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding, 
 		_updateSet(renderer, set, binding, index);
 }
 
-void Texture::load(VulkanImpl* renderer)
+void Texture::load(Renderer* renderer)
 {
 	VkImageCreateInfo info = {};
 	_createImage(renderer, info);
@@ -90,10 +90,10 @@ void Texture::load(VulkanImpl* renderer)
 	view.format = _format;
 	view.subresourceRange = range;
 
-	VkCheck(vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_view));
+	VkCheck(vkCreateImageView(Renderer::device(), &view, nullptr, &_view));
 }
 
-void Texture::unbind(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)
+void Texture::unbind(Renderer* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)
 {
 	VkDescriptorImageInfo info = {};
 	info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -107,22 +107,22 @@ void Texture::unbind(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding
 	write.dstArrayElement = index;
 	write.pImageInfo = &info;
 
-	vkUpdateDescriptorSets(VulkanImpl::device(), 1, &write, 0, nullptr);
+	vkUpdateDescriptorSets(Renderer::device(), 1, &write, 0, nullptr);
 }
 
-void Texture::_allocBindImageMemory(VulkanImpl* renderer)
+void Texture::_allocBindImageMemory(Renderer* renderer)
 {
 	VkMemoryRequirements memReq;
-	vkGetImageMemoryRequirements(VulkanImpl::device(), _image, &memReq);
+	vkGetImageMemoryRequirements(Renderer::device(), _image, &memReq);
 
 	VkMemoryAllocateInfo alloc = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
 	alloc.allocationSize = memReq.size;
 	alloc.memoryTypeIndex = renderer->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	VkCheck(vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_memory));
-	VkCheck(vkBindImageMemory(VulkanImpl::device(), _image, _memory, 0));
+	VkCheck(vkAllocateMemory(Renderer::device(), &alloc, nullptr, &_memory));
+	VkCheck(vkBindImageMemory(Renderer::device(), _image, _memory, 0));
 }
 
-void Texture::_createImage(VulkanImpl* renderer, VkImageCreateInfo& info)
+void Texture::_createImage(Renderer* renderer, VkImageCreateInfo& info)
 {
 	int channels;
 	stbi_uc* tex = stbi_load(_path.c_str(), (int*)&_width, (int*)&_height, &channels, STBI_rgb_alpha);
@@ -160,10 +160,10 @@ void Texture::_createImage(VulkanImpl* renderer, VkImageCreateInfo& info)
 	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	info.samples = VK_SAMPLE_COUNT_1_BIT;
 
-	VkCheck(vkCreateImage(VulkanImpl::device(), &info, nullptr, &_image));
+	VkCheck(vkCreateImage(Renderer::device(), &info, nullptr, &_image));
 }
 
-void Texture::_createInMemory(VulkanImpl* renderer)
+void Texture::_createInMemory(Renderer* renderer)
 {
 	VkExtent3D extent = { _width, _height, 1 };
 	_extents.push_back(extent);
@@ -180,7 +180,7 @@ void Texture::_createInMemory(VulkanImpl* renderer)
 	info.format = _format;
 	info.imageType = VK_IMAGE_TYPE_2D;
 
-	VkCheck(vkCreateImage(VulkanImpl::device(), &info, nullptr, &_image));
+	VkCheck(vkCreateImage(Renderer::device(), &info, nullptr, &_image));
 
 	_allocBindImageMemory(renderer);
 
@@ -194,13 +194,13 @@ void Texture::_createInMemory(VulkanImpl* renderer)
 	view.subresourceRange.layerCount = 1;
 	view.subresourceRange.levelCount = 1;
 
-	VkCheck(vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_view));
+	VkCheck(vkCreateImageView(Renderer::device(), &view, nullptr, &_view));
 
 	SceneRenderPass* p = (SceneRenderPass*)(renderer->getRenderPass(RenderPassType::SCENE));
 	p->allocateTextureDescriptor(_set, SET_BINDING_SHADOW);
 }
 
-void Texture::_updateSet(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)
+void Texture::_updateSet(Renderer* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)
 {
 	VkDescriptorImageInfo info = {};
 	info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -214,5 +214,5 @@ void Texture::_updateSet(VulkanImpl* renderer, VkDescriptorSet set, uint32_t bin
 	write.dstArrayElement = index;
 	write.pImageInfo = &info;
 
-	vkUpdateDescriptorSets(VulkanImpl::device(), 1, &write, 0, nullptr);
+	vkUpdateDescriptorSets(Renderer::device(), 1, &write, 0, nullptr);
 }

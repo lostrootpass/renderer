@@ -2,7 +2,7 @@
 
 #include <stb_image.h>
 
-TextureArray::TextureArray(const std::vector<std::string>& paths, VulkanImpl* renderer)
+TextureArray::TextureArray(const std::vector<std::string>& paths, Renderer* renderer)
 	: _paths(paths), Texture((uint8_t)paths.size())
 {
 	assert(_layers > 0);
@@ -13,7 +13,7 @@ TextureArray::~TextureArray()
 
 }
 
-void TextureArray::_createImage(VulkanImpl* renderer, VkImageCreateInfo& info)
+void TextureArray::_createImage(Renderer* renderer, VkImageCreateInfo& info)
 {
 	uint32_t width = 0, height = 0;
 	int channels;
@@ -85,5 +85,5 @@ void TextureArray::_createImage(VulkanImpl* renderer, VkImageCreateInfo& info)
 	info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	info.samples = VK_SAMPLE_COUNT_1_BIT;
 
-	VkCheck(vkCreateImage(VulkanImpl::device(), &info, nullptr, &_image));
+	VkCheck(vkCreateImage(Renderer::device(), &info, nullptr, &_image));
 }

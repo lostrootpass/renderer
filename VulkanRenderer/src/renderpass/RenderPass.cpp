@@ -1,16 +1,16 @@
 #include "RenderPass.h"
-#include "../VulkanImpl.h"
+#include "../Renderer.h"
 
 RenderPass::~RenderPass()
 {
-	vkDestroyRenderPass(VulkanImpl::device(), _renderPass, nullptr);
-	vkDestroyPipelineLayout(VulkanImpl::device(), _pipelineLayout, nullptr);
-	vkDestroyDescriptorPool(VulkanImpl::device(), _descriptorPool, nullptr);
+	vkDestroyRenderPass(Renderer::device(), _renderPass, nullptr);
+	vkDestroyPipelineLayout(Renderer::device(), _pipelineLayout, nullptr);
+	vkDestroyDescriptorPool(Renderer::device(), _descriptorPool, nullptr);
 
 	destroyPipelines();
 
 	for (VkDescriptorSetLayout& layout : _descriptorLayouts)
-		vkDestroyDescriptorSetLayout(VulkanImpl::device(), layout, nullptr);
+		vkDestroyDescriptorSetLayout(Renderer::device(), layout, nullptr);
 }
 
 void RenderPass::bindDescriptorSet(VkCommandBuffer cmd, SetBinding index, const VkDescriptorSet& set) const
@@ -32,7 +32,7 @@ void RenderPass::bindDescriptorSetById(VkCommandBuffer cmd, SetBinding set, std:
 void RenderPass::destroyPipelines()
 {
 	for (auto& pair : _pipelines)
-		vkDestroyPipeline(VulkanImpl::device(), pair.second, nullptr);
+		vkDestroyPipeline(Renderer::device(), pair.second, nullptr);
 
 	_pipelines.clear();
 }

@@ -12,9 +12,9 @@ public:
 
 	~ShadowMapRenderPass();
 
-	virtual void init(VulkanImpl* renderer) override;
+	virtual void init(Renderer* renderer) override;
 
-	void recreateShadowMap(VulkanImpl* renderer);
+	void recreateShadowMap(Renderer* renderer);
 
 	virtual void render(VkCommandBuffer cmd, VkFramebuffer) override;
 
@@ -28,7 +28,7 @@ public:
 	};
 
 protected:
-	virtual void _createDescriptorSets(VulkanImpl* renderer) override;
+	virtual void _createDescriptorSets(Renderer* renderer) override;
 
 	virtual void _createPipeline(const std::string& shaderName) override;
 

@@ -1,7 +1,7 @@
 #ifndef SWAP_CHAIN_H_
 #define SWAP_CHAIN_H_
 
-#include "VulkanImpl.h"
+#include "Renderer.h"
 #include <vector>
 
 struct SwapChainInfo
@@ -14,7 +14,7 @@ struct SwapChainInfo
 class SwapChain
 {
 public:
-	SwapChain(VulkanImpl& vkImpl);
+	SwapChain(Renderer& vkImpl);
 	SwapChain& operator=(const SwapChain&) = delete;
 	SwapChain(const SwapChain&) = delete;
 	SwapChain(SwapChain&&) = delete;
@@ -50,7 +50,7 @@ private:
 	std::vector<VkImage> _images;
 	std::vector<VkImageView> _imageViews;
 	std::vector<VkFramebuffer> _framebuffers;
-	VulkanImpl* _impl;
+	Renderer* _impl;
 
 	VkSwapchainKHR _vkSwapchain;
 	VkSurfaceKHR _surface;

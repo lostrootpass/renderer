@@ -4,7 +4,7 @@
 //VK_USE_PLATFORM_WIN32_KHR inadvertently prevents us using std::numeric_limits::max
 #undef max
 
-SwapChain::SwapChain(VulkanImpl& vkImpl)
+SwapChain::SwapChain(Renderer& vkImpl)
 	: _vkSwapchain(VK_NULL_HANDLE), _surface(VK_NULL_HANDLE), _impl(&vkImpl)
 {
 	_populateSwapChainInfo();
@@ -15,7 +15,7 @@ SwapChain::~SwapChain()
 	_cleanup();
 
 	if (_vkSwapchain != VK_NULL_HANDLE)
-		vkDestroySwapchainKHR(VulkanImpl::device(), _vkSwapchain, nullptr);
+		vkDestroySwapchainKHR(Renderer::device(), _vkSwapchain, nullptr);
 }
 
 void SwapChain::init(VkSurfaceKHR surface)
@@ -31,7 +31,7 @@ void SwapChain::init(VkSurfaceKHR surface)
 void SwapChain::present()
 {
 	uint32_t idx;
-	VkCheck(vkAcquireNextImageKHR(VulkanImpl::device(), _vkSwapchain, std::numeric_limits<uint64_t>::max(), _imageAvailableSemaphore, VK_NULL_HANDLE, &idx));
+	VkCheck(vkAcquireNextImageKHR(Renderer::device(), _vkSwapchain, std::numeric_limits<uint64_t>::max(), _imageAvailableSemaphore, VK_NULL_HANDLE, &idx));
 
 	VkSemaphore semaphores[] = { _imageAvailableSemaphore };
 	VkSemaphore signals[] = { _renderingFinishedSemaphore };
@@ -76,22 +76,22 @@ void SwapChain::resize(uint32_t width, uint32_t height)
 
 void SwapChain::_cleanup()
 {
-	vkDestroySemaphore(VulkanImpl::device(), _imageAvailableSemaphore, nullptr);
-	vkDestroySemaphore(VulkanImpl::device(), _renderingFinishedSemaphore, nullptr);
+	vkDestroySemaphore(Renderer::device(), _imageAvailableSemaphore, nullptr);
+	vkDestroySemaphore(Renderer::device(), _renderingFinishedSemaphore, nullptr);
 
-	vkDestroyImageView(VulkanImpl::device(), _depthView, nullptr);
-	vkDestroyImage(VulkanImpl::device(), _depthImage, nullptr);
-	vkFreeMemory(VulkanImpl::device(), _depthMemory, nullptr);
+	vkDestroyImageView(Renderer::device(), _depthView, nullptr);
+	vkDestroyImage(Renderer::device(), _depthImage, nullptr);
+	vkFreeMemory(Renderer::device(), _depthMemory, nullptr);
 
 	for (VkFramebuffer fb : _framebuffers)
 	{
-		vkDestroyFramebuffer(VulkanImpl::device(), fb, nullptr);
+		vkDestroyFramebuffer(Renderer::device(), fb, nullptr);
 	}
 	_framebuffers.clear();
 
 	for (VkImageView view : _imageViews)
 	{
-		vkDestroyImageView(VulkanImpl::device(), view, nullptr);
+		vkDestroyImageView(Renderer::device(), view, nullptr);
 	}
 	_imageViews.clear();
 }
@@ -113,17 +113,17 @@ void SwapChain::_createDepthBuffer()
 	info.format = VK_FORMAT_D32_SFLOAT;
 	info.imageType = VK_IMAGE_TYPE_2D;
 
-	VkCheck(vkCreateImage(VulkanImpl::device(), &info, nullptr, &_depthImage));
+	VkCheck(vkCreateImage(Renderer::device(), &info, nullptr, &_depthImage));
 
 	VkMemoryRequirements memReq;
-	vkGetImageMemoryRequirements(VulkanImpl::device(), _depthImage, &memReq);
+	vkGetImageMemoryRequirements(Renderer::device(), _depthImage, &memReq);
 
 	VkMemoryAllocateInfo alloc = {};
 	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	alloc.allocationSize = memReq.size;
 	alloc.memoryTypeIndex = _impl->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	VkCheck(vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &_depthMemory));
-	VkCheck(vkBindImageMemory(VulkanImpl::device(), _depthImage, _depthMemory, 0));
+	VkCheck(vkAllocateMemory(Renderer::device(), &alloc, nullptr, &_depthMemory));
+	VkCheck(vkBindImageMemory(Renderer::device(), _depthImage, _depthMemory, 0));
 
 	VkImageViewCreateInfo view = {};
 	view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -136,7 +136,7 @@ void SwapChain::_createDepthBuffer()
 	view.subresourceRange.layerCount = 1;
 	view.subresourceRange.levelCount = 1;
 	
-	VkCheck(vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_depthView));
+	VkCheck(vkCreateImageView(Renderer::device(), &view, nullptr, &_depthView));
 }
 
 void SwapChain::_createFramebuffers()
@@ -160,7 +160,7 @@ void SwapChain::_createFramebuffers()
 		
 
 		VkFramebuffer framebuffer;
-		VkCheck(vkCreateFramebuffer(VulkanImpl::device(), &info, nullptr, &framebuffer));
+		VkCheck(vkCreateFramebuffer(Renderer::device(), &info, nullptr, &framebuffer));
 
 		_framebuffers.push_back(framebuffer);
 	}
@@ -169,9 +169,9 @@ void SwapChain::_createFramebuffers()
 void SwapChain::_createImageViews()
 {
 	uint32_t imageCount;
-	VkCheck(vkGetSwapchainImagesKHR(VulkanImpl::device(), _vkSwapchain, &imageCount, nullptr));
+	VkCheck(vkGetSwapchainImagesKHR(Renderer::device(), _vkSwapchain, &imageCount, nullptr));
 	_images.resize(imageCount);
-	VkCheck(vkGetSwapchainImagesKHR(VulkanImpl::device(), _vkSwapchain, &imageCount, _images.data()));
+	VkCheck(vkGetSwapchainImagesKHR(Renderer::device(), _vkSwapchain, &imageCount, _images.data()));
 
 	for (VkImage image : _images)
 	{
@@ -193,7 +193,7 @@ void SwapChain::_createImageViews()
 		info.subresourceRange.layerCount = 1;
 
 		VkImageView view;
-		VkCheck(vkCreateImageView(VulkanImpl::device(), &info, nullptr, &view));
+		VkCheck(vkCreateImageView(Renderer::device(), &info, nullptr, &view));
 
 		_imageViews.push_back(view);
 	}
@@ -204,13 +204,13 @@ void SwapChain::_createSemaphores()
 	VkSemaphoreCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	
-	VkCheck(vkCreateSemaphore(VulkanImpl::device(), &info, nullptr, &_imageAvailableSemaphore));
-	VkCheck(vkCreateSemaphore(VulkanImpl::device(), &info, nullptr, &_renderingFinishedSemaphore));
+	VkCheck(vkCreateSemaphore(Renderer::device(), &info, nullptr, &_imageAvailableSemaphore));
+	VkCheck(vkCreateSemaphore(Renderer::device(), &info, nullptr, &_renderingFinishedSemaphore));
 }
 
 void SwapChain::_createSwapChain()
 {
-	//TODO: pass these in from VulkanImpl.
+	//TODO: pass these in from Renderer.
 	//uint32_t indices[] = { _graphicsQueue.index, _presentQueue.index };
 	VkSurfaceCapabilitiesKHR caps = _swapChainInfo.surfaceCapabilities;
 	VkSwapchainCreateInfoKHR info = { VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
@@ -245,11 +245,11 @@ void SwapChain::_createSwapChain()
 
 	//Keep existing swap chain around until after the new one is created
 	VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
-	VkCheck(vkCreateSwapchainKHR(VulkanImpl::device(), &info, nullptr, &newSwapchain));
+	VkCheck(vkCreateSwapchainKHR(Renderer::device(), &info, nullptr, &newSwapchain));
 
 	if (_vkSwapchain != VK_NULL_HANDLE)
 	{
-		vkDestroySwapchainKHR(VulkanImpl::device(), _vkSwapchain, nullptr);
+		vkDestroySwapchainKHR(Renderer::device(), _vkSwapchain, nullptr);
 	}
 
 	_vkSwapchain = newSwapchain;

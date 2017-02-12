@@ -34,11 +34,11 @@ struct Uniform
 	VkDeviceSize range;
 };
 
-typedef class VulkanImpl
+class Renderer
 {
 public:
-	VulkanImpl();
-	~VulkanImpl();
+	Renderer();
+	~Renderer();
 
 	void addRenderPass(RenderPass* renderPass);
 
@@ -166,6 +166,6 @@ private:
 	VkPhysicalDevice _pickPhysicalDevice();
 	void _queryDeviceQueueFamilies(VkPhysicalDevice device);
 	void _registerDebugger();
-} Renderer;
+};
 
 #endif //VULKAN_IMPL_H_

@@ -79,7 +79,7 @@ float sampleShadowMap(vec2 offset)
     vec4 coord = shadowCoord/ shadowCoord.w;
     vec4 shadow = texture(sampler2D(shadowMap, texsampler), coord.xy + offset);
 
-    if(coord.z > shadow.z + SHADOW_BIAS && shadow.w > 0.0)
+    if(coord.z > shadow.z + SHADOW_BIAS)
         return 0.3;
     else
         return 1.0;

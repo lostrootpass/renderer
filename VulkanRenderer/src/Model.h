@@ -11,7 +11,7 @@
 #include "texture/TextureArray.h"
 #include "Buffer.h"
 
-class VulkanImpl;
+class Renderer;
 
 struct Vertex
 {
@@ -64,16 +64,16 @@ struct ModelUniform
 class Model
 {
 public:
-	Model(const std::string& name, VulkanImpl* renderer);
+	Model(const std::string& name, Renderer* renderer);
 	~Model();
 
-	void draw(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pass);
+	void draw(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass);
 
-	void drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pass);
+	void drawShadow(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass);
 
-	void reload(VulkanImpl* renderer);
+	void reload(Renderer* renderer);
 
-	void update(VulkanImpl*, float dtime);
+	void update(Renderer*, float dtime);
 
 	inline const std::string& name() const
 	{
@@ -107,8 +107,8 @@ private:
 
 	float _scale;
 
-	void _load(VulkanImpl* renderer);
-	void _loadModel(VulkanImpl* renderer);
+	void _load(Renderer* renderer);
+	void _loadModel(Renderer* renderer);
 };
 
 #endif //MODEL_H_

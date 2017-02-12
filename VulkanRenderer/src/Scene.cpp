@@ -14,14 +14,14 @@ enum SceneFlags
 	SCENEFLAG_ENABLEPCF = 0x0040
 };
 
-Scene::Scene(VulkanImpl& renderer) : _camera(nullptr), _renderer(&renderer)
+Scene::Scene(Renderer& renderer) : _camera(nullptr), _renderer(&renderer)
 {
 	_init();
 }
 
 Scene::~Scene()
 {
-	vkDeviceWaitIdle(VulkanImpl::device());
+	vkDeviceWaitIdle(Renderer::device());
 
 	for (Model* model : _models)
 	{

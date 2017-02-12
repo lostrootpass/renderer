@@ -1,5 +1,5 @@
 #include "Model.h"
-#include "VulkanImpl.h"
+#include "Renderer.h"
 #include "texture/TextureCache.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -9,7 +9,7 @@
 
 static uint32_t MODEL_INDEX = 0;
 
-Model::Model(const std::string& name, VulkanImpl* renderer)
+Model::Model(const std::string& name, Renderer* renderer)
 	: _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f)), _scale(1.0f),
 	_pipeline(VK_NULL_HANDLE), _shadowPipeline(VK_NULL_HANDLE)
 {
@@ -24,7 +24,7 @@ Model::~Model()
 		delete a;
 }
 
-void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pass)
+void Model::draw(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass)
 {
 	pass.bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
 	
@@ -56,7 +56,7 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pass)
 	}
 }
 
-void Model::drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pass)
+void Model::drawShadow(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass)
 {
 	pass.bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
 
@@ -86,13 +86,13 @@ void Model::drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pa
 	}
 }
 
-void Model::reload(VulkanImpl* renderer)
+void Model::reload(Renderer* renderer)
 {
 	_pipeline = VK_NULL_HANDLE;
 	_shadowPipeline = VK_NULL_HANDLE;
 }
 
-void Model::update(VulkanImpl* renderer, float dtime)
+void Model::update(Renderer* renderer, float dtime)
 {
 	static float time = 0;
 	time += dtime;
@@ -107,7 +107,7 @@ void Model::update(VulkanImpl* renderer, float dtime)
 	renderer->updateUniform("material", (void*)&_materialData, sizeof(_materialData), renderer->getAlignedRange(sizeof(_materialData)) * _index);
 }
 
-void Model::_load(VulkanImpl* renderer)
+void Model::_load(Renderer* renderer)
 {
 	assert(sizeof(MaterialData) <= renderer->properties().limits.maxUniformBufferRange);
 
@@ -161,7 +161,7 @@ void Model::_load(VulkanImpl* renderer)
 	}
 }
 
-void Model::_loadModel(VulkanImpl* renderer)
+void Model::_loadModel(Renderer* renderer)
 {
 	char baseDir[128] = { '\0' };
 	sprintf_s(baseDir, "assets/models/%s/", _name.c_str());

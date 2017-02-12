@@ -2,7 +2,7 @@
 #define CORE_H_
 
 #include "Window.h"
-#include "VulkanImpl.h"
+#include "Renderer.h"
 
 class Scene;
 

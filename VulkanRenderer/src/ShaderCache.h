@@ -1,7 +1,7 @@
 #ifndef SHADER_CACHE_H_
 #define SHADER_CACHE_H_
 
-#include "VulkanImpl.h"
+#include "Renderer.h"
 #include <vulkan/vulkan.h>
 #include <unordered_map>
 #include <fstream>
@@ -33,7 +33,7 @@ struct ShaderCache final
 	{
 		for (auto pair : _moduleCache)
 		{
-			vkDestroyShaderModule(VulkanImpl::device(), pair.second, nullptr);
+			vkDestroyShaderModule(Renderer::device(), pair.second, nullptr);
 		}
 
 		_moduleCache.clear();
@@ -57,7 +57,7 @@ private:
 		info.pCode = (uint32_t*)code;
 
 		VkShaderModule module;
-		VkCheck(vkCreateShaderModule(VulkanImpl::device(), &info, nullptr, &module));
+		VkCheck(vkCreateShaderModule(Renderer::device(), &info, nullptr, &module));
 
 		_moduleCache[name] = module;
 		delete[] code;

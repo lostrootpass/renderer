@@ -1,4 +1,4 @@
-#include "VulkanImpl.h"
+#include "Renderer.h"
 #include "SwapChain.h"
 #include "ShaderCache.h"
 #include "texture/TextureCache.h"
@@ -13,30 +13,30 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 
-VkDevice VulkanImpl::_device = VK_NULL_HANDLE;
-VkPhysicalDevice VulkanImpl::_physicalDevice = VK_NULL_HANDLE;
+VkDevice Renderer::_device = VK_NULL_HANDLE;
+VkPhysicalDevice Renderer::_physicalDevice = VK_NULL_HANDLE;
 
 //TODO: don't hardcode this and recreate the pool if necessary
 const int MAX_TEXTURES = 64;
 const int MAX_MODELS = 64;
 const int MAX_MATERIALS = 64;
 
-VulkanImpl::VulkanImpl() : _swapChain(nullptr)
+Renderer::Renderer() : _swapChain(nullptr)
 {
 
 }
 
-VulkanImpl::~VulkanImpl()
+Renderer::~Renderer()
 {
 	_cleanup();
 }
 
-void VulkanImpl::addRenderPass(RenderPass* renderPass)
+void Renderer::addRenderPass(RenderPass* renderPass)
 {
 	_renderPasses.push_back(renderPass);
 }
 
-void VulkanImpl::copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset) const
+void Renderer::copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset) const
 {
 	VkCommandBuffer buffer = startOneShotCmdBuffer();
 
@@ -49,28 +49,28 @@ void VulkanImpl::copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize s
 	submitOneShotCmdBuffer(buffer);
 }
 
-void VulkanImpl::clearShaderCache()
+void Renderer::clearShaderCache()
 {
 	ShaderCache::clear();
 }
 
-void VulkanImpl::createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buffer, VkMemoryPropertyFlags flags) const
+void Renderer::createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buffer, VkMemoryPropertyFlags flags) const
 {
 	VkMemoryRequirements memReq;
 
 	VkCheck(vkCreateBuffer(_device, &info, nullptr, &buffer.buffer));
-	vkGetBufferMemoryRequirements(VulkanImpl::device(), buffer.buffer, &memReq);
+	vkGetBufferMemoryRequirements(Renderer::device(), buffer.buffer, &memReq);
 
 	VkMemoryAllocateInfo alloc = {};
 	alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	alloc.allocationSize = memReq.size;
 	alloc.memoryTypeIndex = getMemoryTypeIndex(memReq.memoryTypeBits, flags);
 
-	VkCheck(vkAllocateMemory(VulkanImpl::device(), &alloc, nullptr, &buffer.memory));
-	VkCheck(vkBindBufferMemory(VulkanImpl::device(), buffer.buffer, buffer.memory, 0));
+	VkCheck(vkAllocateMemory(Renderer::device(), &alloc, nullptr, &buffer.memory));
+	VkCheck(vkBindBufferMemory(Renderer::device(), buffer.buffer, buffer.memory, 0));
 }
 
-Uniform* VulkanImpl::createUniform(const std::string& name, size_t size, size_t range)
+Uniform* Renderer::createUniform(const std::string& name, size_t size, size_t range)
 {
 	if (_uniforms.find(name) != _uniforms.end())
 	{
@@ -98,7 +98,7 @@ Uniform* VulkanImpl::createUniform(const std::string& name, size_t size, size_t 
 	return uniform;
 }
 
-void VulkanImpl::destroyPipelines()
+void Renderer::destroyPipelines()
 {
 	vkDeviceWaitIdle(_device);
 
@@ -106,7 +106,7 @@ void VulkanImpl::destroyPipelines()
 		p->destroyPipelines();
 }
 
-size_t VulkanImpl::getAlignedRange(size_t needed) const
+size_t Renderer::getAlignedRange(size_t needed) const
 {
 	size_t min = _physicalProperties.limits.minUniformBufferOffsetAlignment;
 	size_t mod = needed % min;
@@ -115,7 +115,7 @@ size_t VulkanImpl::getAlignedRange(size_t needed) const
 	return range;
 }
 
-uint32_t VulkanImpl::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const
+uint32_t Renderer::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags flags) const
 {
 	VkPhysicalDeviceMemoryProperties props;
 	vkGetPhysicalDeviceMemoryProperties(_physicalDevice, &props);
@@ -131,7 +131,7 @@ uint32_t VulkanImpl::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags fla
 	return -1;
 }
 
-RenderPass* VulkanImpl::getRenderPass(RenderPassType type) const
+RenderPass* Renderer::getRenderPass(RenderPassType type) const
 {
 	for (RenderPass* p : _renderPasses)
 	{
@@ -142,7 +142,7 @@ RenderPass* VulkanImpl::getRenderPass(RenderPassType type) const
 	return nullptr;
 }
 
-Uniform* VulkanImpl::getUniform(const std::string& name)
+Uniform* Renderer::getUniform(const std::string& name)
 {
 	if (_uniforms.find(name) != _uniforms.end())
 		return _uniforms[name];
@@ -151,7 +151,7 @@ Uniform* VulkanImpl::getUniform(const std::string& name)
 	return nullptr;
 }
 
-void VulkanImpl::init(const Window& window)
+void Renderer::init(const Window& window)
 {
 	_createInstance();
 
@@ -169,7 +169,7 @@ void VulkanImpl::init(const Window& window)
 	_createUniforms();
 }
 
-void VulkanImpl::recordCommandBuffers(const Scene* scene)
+void Renderer::recordCommandBuffers(const Scene* scene)
 {
 	//TODO: use fences properly instead
 	vkDeviceWaitIdle(_device);
@@ -193,19 +193,19 @@ void VulkanImpl::recordCommandBuffers(const Scene* scene)
 	}
 }
 
-void VulkanImpl::recreateSwapChain(uint32_t width, uint32_t height)
+void Renderer::recreateSwapChain(uint32_t width, uint32_t height)
 {
 	vkDeviceWaitIdle(_device);
 	_swapChain->resize(width, height);
 	_allocateCommandBuffers();
 }
 
-void VulkanImpl::render()
+void Renderer::render()
 {
 	_swapChain->present();
 }
 
-void VulkanImpl::setImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange& range) const
+void Renderer::setImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange& range) const
 {
 	VkCommandBuffer buffer = startOneShotCmdBuffer();
 
@@ -241,7 +241,7 @@ void VulkanImpl::setImageLayout(VkImage image, VkFormat format, VkImageLayout ol
 	submitOneShotCmdBuffer(buffer);
 }
 
-VkCommandBuffer VulkanImpl::startOneShotCmdBuffer() const
+VkCommandBuffer Renderer::startOneShotCmdBuffer() const
 {
 	VkCommandBufferAllocateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -261,7 +261,7 @@ VkCommandBuffer VulkanImpl::startOneShotCmdBuffer() const
 	return buffer;
 }
 
-void VulkanImpl::submitOneShotCmdBuffer(VkCommandBuffer buffer) const
+void Renderer::submitOneShotCmdBuffer(VkCommandBuffer buffer) const
 {
 	VkCheck(vkEndCommandBuffer(buffer));
 
@@ -276,7 +276,7 @@ void VulkanImpl::submitOneShotCmdBuffer(VkCommandBuffer buffer) const
 	vkFreeCommandBuffers(_device, _commandPool, 1, &buffer);
 }
 
-void VulkanImpl::updateUniform(const std::string& name, void* data, size_t size, size_t offset)
+void Renderer::updateUniform(const std::string& name, void* data, size_t size, size_t offset)
 {
 	if (_uniforms.find(name) == _uniforms.end())
 		return;
@@ -286,7 +286,7 @@ void VulkanImpl::updateUniform(const std::string& name, void* data, size_t size,
 	copyBuffer(uniform->localBuffer, uniform->stagingBuffer, size, offset);
 }
 
-void VulkanImpl::_allocateCommandBuffers()
+void Renderer::_allocateCommandBuffers()
 {
 	if (_commandBuffers.size())
 		_commandBuffers.clear();
@@ -305,7 +305,7 @@ void VulkanImpl::_allocateCommandBuffers()
 	recordCommandBuffers();
 }
 
-void VulkanImpl::_cleanup()
+void Renderer::_cleanup()
 {
 	VkCheck(vkDeviceWaitIdle(_device));
 
@@ -347,7 +347,7 @@ void VulkanImpl::_cleanup()
 	vkDestroyInstance(_instance, nullptr);
 }
 
-void VulkanImpl::_createCommandPool()
+void Renderer::_createCommandPool()
 {
 	VkCommandPoolCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -357,7 +357,7 @@ void VulkanImpl::_createCommandPool()
 	VkCheck(vkCreateCommandPool(_device, &info, nullptr, &_commandPool));
 }
 
-void VulkanImpl::_createInstance()
+void Renderer::_createInstance()
 {
 	VkApplicationInfo applicationInfo = {};
 	applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -394,7 +394,7 @@ void VulkanImpl::_createInstance()
 	VkCheck(vkCreateInstance(&createInfo, nullptr, &_instance));
 }
 
-void VulkanImpl::_createSampler()
+void Renderer::_createSampler()
 {
 	VkSamplerCreateInfo samplerInfo = {};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -424,14 +424,14 @@ void VulkanImpl::_createSampler()
 	VkCheck(vkCreateSampler(_device, &samplerInfo, nullptr, &_sampler));
 }
 
-void VulkanImpl::_createSwapChain()
+void Renderer::_createSwapChain()
 {
 	_swapChain = new SwapChain(*this);
 	_swapChain->init(_surface);
 	_extent = _swapChain->surfaceCapabilities().currentExtent;
 }
 
-void VulkanImpl::_createUniforms()
+void Renderer::_createUniforms()
 {
 	createUniform("camera", sizeof(CameraUniform));
 	createUniform("model", getAlignedRange(sizeof(ModelUniform)) * MAX_MODELS);
@@ -439,7 +439,7 @@ void VulkanImpl::_createUniforms()
 	createUniform("material", getAlignedRange(sizeof(MaterialData)) * MAX_MODELS);
 }
 
-void VulkanImpl::_initDevice()
+void Renderer::_initDevice()
 {
 	_physicalDevice = _pickPhysicalDevice();
 
@@ -489,7 +489,7 @@ void VulkanImpl::_initDevice()
 	vkGetDeviceQueue(_device, _presentQueue.index, 0, &_presentQueue.vkQueue);
 }
 
-VkPhysicalDevice VulkanImpl::_pickPhysicalDevice()
+VkPhysicalDevice Renderer::_pickPhysicalDevice()
 {
 	uint32_t physicalDeviceCount;
 	VkCheck(vkEnumeratePhysicalDevices(_instance, &physicalDeviceCount, nullptr));
@@ -523,7 +523,7 @@ VkPhysicalDevice VulkanImpl::_pickPhysicalDevice()
 	return physicalDevice;
 }
 
-void VulkanImpl::_queryDeviceQueueFamilies(VkPhysicalDevice device)
+void Renderer::_queryDeviceQueueFamilies(VkPhysicalDevice device)
 {
 	_graphicsQueue.index = -1, _presentQueue.index = -1;
 	uint32_t queueFamilyCount = 0;
@@ -551,7 +551,7 @@ void VulkanImpl::_queryDeviceQueueFamilies(VkPhysicalDevice device)
 	}
 }
 
-void VulkanImpl::_registerDebugger()
+void Renderer::_registerDebugger()
 {
 	if (!VulkanUtil::DEBUGENABLE) return;
 

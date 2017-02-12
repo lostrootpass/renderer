@@ -8,22 +8,22 @@
 #include "../SetBinding.h"
 #include "../Buffer.h"
 
-class VulkanImpl;
+class Renderer;
 
 class Texture
 {
 public:
-	Texture(const std::string& path, VulkanImpl* renderer);
+	Texture(const std::string& path, Renderer* renderer);
 
-	Texture(uint32_t width, uint32_t height, VkFormat format, VulkanImpl* renderer);
+	Texture(uint32_t width, uint32_t height, VkFormat format, Renderer* renderer);
 
 	~Texture();
 
-	void bind(VulkanImpl* renderer, VkDescriptorSet set = VK_NULL_HANDLE, uint32_t binding = 0, uint32_t index = 0);
+	void bind(Renderer* renderer, VkDescriptorSet set = VK_NULL_HANDLE, uint32_t binding = 0, uint32_t index = 0);
 
-	void load(VulkanImpl* renderer);
+	void load(Renderer* renderer);
 
-	void unbind(VulkanImpl* renderer, VkDescriptorSet set = VK_NULL_HANDLE, uint32_t binding = 0, uint32_t index = 0);
+	void unbind(Renderer* renderer, VkDescriptorSet set = VK_NULL_HANDLE, uint32_t binding = 0, uint32_t index = 0);
 
 	inline const VkDescriptorSet& set() const
 	{
@@ -59,18 +59,18 @@ protected:
 
 	Buffer _staging;
 
-	void _allocBindImageMemory(VulkanImpl* renderer);
+	void _allocBindImageMemory(Renderer* renderer);
 
 	//TODO: make Texture abstract and rename existing Texture to Texture2D
-	virtual void _createImage(VulkanImpl* renderer, VkImageCreateInfo& info) /*= 0*/;
+	virtual void _createImage(Renderer* renderer, VkImageCreateInfo& info) /*= 0*/;
 
-	void _updateSet(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding = 0, uint32_t index = 0);
+	void _updateSet(Renderer* renderer, VkDescriptorSet set, uint32_t binding = 0, uint32_t index = 0);
 
 private:
 	std::string _path;
 
 	//TODO: move to DynamicTexture, DepthTexture, etc. or similar class
-	void _createInMemory(VulkanImpl* renderer);
+	void _createInMemory(Renderer* renderer);
 };
 
 #endif //TEXTURE_H_

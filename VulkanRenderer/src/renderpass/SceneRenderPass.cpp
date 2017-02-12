@@ -20,10 +20,10 @@ void SceneRenderPass::allocateTextureDescriptor(VkDescriptorSet& set, SetBinding
 	alloc.descriptorSetCount = 1;
 	alloc.descriptorPool = _descriptorPool;
 	alloc.pSetLayouts = &_descriptorLayouts[binding];
-	VkCheck(vkAllocateDescriptorSets(VulkanImpl::device(), &alloc, &set));
+	VkCheck(vkAllocateDescriptorSets(Renderer::device(), &alloc, &set));
 }
 
-void SceneRenderPass::init(VulkanImpl* renderer)
+void SceneRenderPass::init(Renderer* renderer)
 {
 	_extent = renderer->extent();
 
@@ -66,7 +66,7 @@ void SceneRenderPass::render(VkCommandBuffer cmd, VkFramebuffer framebuffer)
 	vkCmdEndRenderPass(cmd);
 };
 
-void SceneRenderPass::_createDescriptorSets(VulkanImpl* renderer)
+void SceneRenderPass::_createDescriptorSets(Renderer* renderer)
 {
 	VkDescriptorPoolSize sizes[4] = {};
 	//Camera matrix & lights
@@ -91,7 +91,7 @@ void SceneRenderPass::_createDescriptorSets(VulkanImpl* renderer)
 	pool.pPoolSizes = sizes;
 	pool.maxSets = SET_BINDING_COUNT + MAX_TEXTURES;
 
-	VkCheck(vkCreateDescriptorPool(VulkanImpl::device(), &pool, nullptr, &_descriptorPool));
+	VkCheck(vkCreateDescriptorPool(Renderer::device(), &pool, nullptr, &_descriptorPool));
 
 	VkDescriptorSetAllocateInfo alloc = {};
 	alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -101,7 +101,7 @@ void SceneRenderPass::_createDescriptorSets(VulkanImpl* renderer)
 
 	_descriptorSets.resize(SET_BINDING_COUNT);
 
-	VkCheck(vkAllocateDescriptorSets(VulkanImpl::device(), &alloc, _descriptorSets.data()));
+	VkCheck(vkAllocateDescriptorSets(Renderer::device(), &alloc, _descriptorSets.data()));
 
 	{
 		VkDescriptorBufferInfo buff = {};
@@ -119,7 +119,7 @@ void SceneRenderPass::_createDescriptorSets(VulkanImpl* renderer)
 		writes[0].dstArrayElement = 0;
 		writes[0].pBufferInfo = &buff;
 
-		vkUpdateDescriptorSets(VulkanImpl::device(), 1, writes, 0, nullptr);
+		vkUpdateDescriptorSets(Renderer::device(), 1, writes, 0, nullptr);
 	}
 
 	{
@@ -140,7 +140,7 @@ void SceneRenderPass::_createDescriptorSets(VulkanImpl* renderer)
 		writes[0].dstArrayElement = 0;
 		writes[0].pBufferInfo = &buff;
 
-		vkUpdateDescriptorSets(VulkanImpl::device(), 1, writes, 0, nullptr);
+		vkUpdateDescriptorSets(Renderer::device(), 1, writes, 0, nullptr);
 	}
 
 	{
@@ -157,7 +157,7 @@ void SceneRenderPass::_createDescriptorSets(VulkanImpl* renderer)
 		writes[0].dstArrayElement = 0;
 		writes[0].pImageInfo = &img;
 
-		vkUpdateDescriptorSets(VulkanImpl::device(), 1, writes, 0, nullptr);
+		vkUpdateDescriptorSets(Renderer::device(), 1, writes, 0, nullptr);
 	}
 
 	{
@@ -176,7 +176,7 @@ void SceneRenderPass::_createDescriptorSets(VulkanImpl* renderer)
 		writes[0].dstArrayElement = 0;
 		writes[0].pBufferInfo = &buff;
 
-		vkUpdateDescriptorSets(VulkanImpl::device(), 1, writes, 0, nullptr);
+		vkUpdateDescriptorSets(Renderer::device(), 1, writes, 0, nullptr);
 	}
 
 	{
@@ -197,7 +197,7 @@ void SceneRenderPass::_createDescriptorSets(VulkanImpl* renderer)
 		write.dstArrayElement = 0;
 		write.pBufferInfo = &buff;
 
-		vkUpdateDescriptorSets(VulkanImpl::device(), 1, &write, 0, nullptr);
+		vkUpdateDescriptorSets(Renderer::device(), 1, &write, 0, nullptr);
 	}
 }
 
@@ -322,7 +322,7 @@ void SceneRenderPass::_createPipeline(const std::string& shaderName)
 	info.pDepthStencilState = &dss;
 	info.pDynamicState = &dys;
 
-	VkCheck(vkCreateGraphicsPipelines(VulkanImpl::device(), VK_NULL_HANDLE, 1, &info, nullptr, &pipeline));
+	VkCheck(vkCreateGraphicsPipelines(Renderer::device(), VK_NULL_HANDLE, 1, &info, nullptr, &pipeline));
 
 	_pipelines[shaderName] = pipeline;
 }
@@ -342,37 +342,37 @@ void SceneRenderPass::_createPipelineLayout()
 
 	_descriptorLayouts.resize(SET_BINDING_COUNT);
 
-	VkCheck(vkCreateDescriptorSetLayout(VulkanImpl::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_CAMERA]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_CAMERA]));
 
 	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-	VkCheck(vkCreateDescriptorSetLayout(VulkanImpl::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_MODEL]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_MODEL]));
 
 	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	bindings[0].descriptorCount = 1;
-	VkCheck(vkCreateDescriptorSetLayout(VulkanImpl::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_SAMPLER]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_SAMPLER]));
 
 	info.bindingCount = 1;
 	bindings[0].binding = 0;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[0].descriptorCount = MAX_MATERIALS;
-	VkCheck(vkCreateDescriptorSetLayout(VulkanImpl::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_TEXTURE]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_TEXTURE]));
 
 	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	bindings[0].descriptorCount = 1;
 	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
-	VkCheck(vkCreateDescriptorSetLayout(VulkanImpl::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_LIGHTS]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_LIGHTS]));
 
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	VkCheck(vkCreateDescriptorSetLayout(VulkanImpl::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_SHADOW]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_SHADOW]));
 
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	bindings[0].descriptorCount = 1;
-	VkCheck(vkCreateDescriptorSetLayout(VulkanImpl::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_MATERIAL]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_MATERIAL]));
 
 	VkPushConstantRange pushConstants;
 	pushConstants.offset = 0;
@@ -386,7 +386,7 @@ void SceneRenderPass::_createPipelineLayout()
 	layoutCreateInfo.pushConstantRangeCount = 1;
 	layoutCreateInfo.pPushConstantRanges = &pushConstants;
 
-	VkCheck(vkCreatePipelineLayout(VulkanImpl::device(), &layoutCreateInfo, nullptr, &_pipelineLayout));
+	VkCheck(vkCreatePipelineLayout(Renderer::device(), &layoutCreateInfo, nullptr, &_pipelineLayout));
 }
 
 void SceneRenderPass::_createRenderPass()
@@ -451,5 +451,5 @@ void SceneRenderPass::_createRenderPass()
 	info.dependencyCount = 1;
 	info.pDependencies = &dependency;
 
-	VkCheck(vkCreateRenderPass(VulkanImpl::device(), &info, nullptr, &_renderPass));
+	VkCheck(vkCreateRenderPass(Renderer::device(), &info, nullptr, &_renderPass));
 }

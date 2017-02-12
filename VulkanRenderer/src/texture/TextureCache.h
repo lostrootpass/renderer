@@ -3,7 +3,7 @@
 
 #include <unordered_map>
 
-#include "../VulkanImpl.h"
+#include "../Renderer.h"
 #include "Texture.h"
 
 struct TextureCache final
@@ -17,7 +17,7 @@ struct TextureCache final
 
 	}
 
-	static Texture* const getTexture(const std::string& texturePath, VulkanImpl& renderer)
+	static Texture* const getTexture(const std::string& texturePath, Renderer& renderer)
 	{
 		if (_textureCache.find(texturePath) != _textureCache.end())
 			return _textureCache[texturePath];
@@ -40,7 +40,7 @@ struct TextureCache final
 private:
 	static std::unordered_map<std::string, Texture*> _textureCache;
 
-	static void _loadTexture(const std::string& name, VulkanImpl& renderer)
+	static void _loadTexture(const std::string& name, Renderer& renderer)
 	{
 		_textureCache[name] = new Texture(name, &renderer);
 	}

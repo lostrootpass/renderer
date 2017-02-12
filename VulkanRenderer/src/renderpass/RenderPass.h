@@ -12,7 +12,7 @@ enum class RenderPassType
 	SCENE
 };
 
-class VulkanImpl;
+class Renderer;
 
 class RenderPass
 {
@@ -33,7 +33,7 @@ public:
 		return _pipelines[shaderName];
 	};
 
-	virtual void init(VulkanImpl* renderer) = 0;
+	virtual void init(Renderer* renderer) = 0;
 
 	virtual void render(VkCommandBuffer cmd, VkFramebuffer framebuffer = VK_NULL_HANDLE) = 0;
 
@@ -56,7 +56,7 @@ protected:
 
 	std::unordered_map<std::string, VkPipeline> _pipelines;
 
-	virtual void _createDescriptorSets(VulkanImpl* renderer) = 0;
+	virtual void _createDescriptorSets(Renderer* renderer) = 0;
 
 	virtual void _createPipeline(const std::string& shaderName) = 0;
 

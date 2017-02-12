@@ -15,7 +15,7 @@ public:
 
 	void SceneRenderPass::allocateTextureDescriptor(VkDescriptorSet& set, SetBinding binding = SET_BINDING_TEXTURE);
 
-	virtual void init(VulkanImpl* renderer) override;
+	virtual void init(Renderer* renderer) override;
 
 	virtual void render(VkCommandBuffer cmd, VkFramebuffer framebuffer = VK_NULL_HANDLE) override;
 
@@ -24,7 +24,7 @@ public:
 	};
 
 protected:
-	virtual void _createDescriptorSets(VulkanImpl* renderer) override;
+	virtual void _createDescriptorSets(Renderer* renderer) override;
 
 	virtual void _createPipeline(const std::string& shaderName) override;
 

@@ -2,7 +2,7 @@
 #define SCENE_H_
 
 #include <vector>
-#include "VulkanImpl.h"
+#include "Renderer.h"
 #include "Light.h"
 #include "Camera.h"
 
@@ -14,7 +14,7 @@ class RenderPass;
 class Scene
 {
 public:
-	Scene(VulkanImpl& renderer);
+	Scene(Renderer& renderer);
 	~Scene();
 
 	void addModel(const std::string& name, float scale = 1.0f);
@@ -40,7 +40,7 @@ private:
 	std::vector<Model*> _models;
 	std::vector<Light> _lights;
 
-	VulkanImpl* _renderer;
+	Renderer* _renderer;
 	Camera* _camera;
 
 	uint32_t _sceneFlags;
