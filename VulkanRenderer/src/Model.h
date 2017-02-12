@@ -67,9 +67,9 @@ public:
 	Model(const std::string& name, VulkanImpl* renderer);
 	~Model();
 
-	void draw(VulkanImpl* renderer, VkCommandBuffer cmd);
+	void draw(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pass);
 
-	void drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd);
+	void drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pass);
 
 	void reload(VulkanImpl* renderer);
 

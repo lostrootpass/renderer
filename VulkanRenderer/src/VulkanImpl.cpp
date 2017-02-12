@@ -5,7 +5,7 @@
 #include "Model.h"
 #include "Camera.h"
 #include "Scene.h"
-#include "ShadowMap.h"
+#include "renderpass/ShadowMapRenderPass.h"
 
 #include <set>
 
@@ -21,7 +21,7 @@ const int MAX_TEXTURES = 64;
 const int MAX_MODELS = 64;
 const int MAX_MATERIALS = 64;
 
-VulkanImpl::VulkanImpl() : _swapChain(nullptr), _shadowMap(nullptr)
+VulkanImpl::VulkanImpl() : _swapChain(nullptr)
 {
 
 }
@@ -31,29 +31,9 @@ VulkanImpl::~VulkanImpl()
 	_cleanup();
 }
 
-void VulkanImpl::allocateTextureDescriptor(VkDescriptorSet& set, SetBinding binding)
+void VulkanImpl::addRenderPass(RenderPass* renderPass)
 {
-	VkDescriptorSetAllocateInfo alloc = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
-	alloc.descriptorSetCount = 1;
-	alloc.descriptorPool = _descriptorPool;
-	alloc.pSetLayouts = &_descriptorLayouts[binding];
-	VkCheck(vkAllocateDescriptorSets(VulkanImpl::device(), &alloc, &set));
-}
-
-void VulkanImpl::bindDescriptorSet(VkCommandBuffer cmd, SetBinding index, const VkDescriptorSet& set, bool offscreen) const
-{
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, offscreen? _offscreenLayout : _pipelineLayout, index, 1, &set, 0, nullptr);
-}
-
-void VulkanImpl::bindDescriptorSetById(VkCommandBuffer cmd, SetBinding set, std::vector<uint32_t>* offsets, bool offscreen) const
-{
-	if (set > SET_BINDING_COUNT)
-		return;
-
-	uint32_t offsetCount = (offsets ? (uint32_t)offsets->size() : 0);
-	const uint32_t* offsetData = (offsets ? offsets->data() : nullptr);
-
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, offscreen ? _offscreenLayout : _pipelineLayout, set, 1, &_descriptorSets[set], offsetCount, offsetData);
+	_renderPasses.push_back(renderPass);
 }
 
 void VulkanImpl::copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset) const
@@ -122,12 +102,8 @@ void VulkanImpl::destroyPipelines()
 {
 	vkDeviceWaitIdle(_device);
 
-	for (auto pair : _pipelines)
-	{
-		vkDestroyPipeline(_device, pair.second, nullptr);
-	}
-
-	_pipelines.clear();
+	for (RenderPass* p : _renderPasses)
+		p->destroyPipelines();
 }
 
 size_t VulkanImpl::getAlignedRange(size_t needed) const
@@ -155,138 +131,15 @@ uint32_t VulkanImpl::getMemoryTypeIndex(uint32_t bits, VkMemoryPropertyFlags fla
 	return -1;
 }
 
-//TODO: get rid of useOffscreenLayout parameter
-const VkPipeline VulkanImpl::getPipelineForShader(const std::string& shaderName, bool useOffscreenLayout)
+RenderPass* VulkanImpl::getRenderPass(RenderPassType type) const
 {
-	if (_pipelines.find(shaderName) != _pipelines.end())
-		return _pipelines[shaderName];
-
-	VkPipeline pipeline;
-
-	VkPipelineShaderStageCreateInfo stages[2] = {};
-	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-	stages[0].pName = "main";
-	stages[0].module = ShaderCache::getModule(shaderName + ".vert");
-
-	stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	stages[1].pName = "main";
-	stages[1].module = ShaderCache::getModule(shaderName + ".frag");
-
-	VkPipelineColorBlendAttachmentState cba = {};
-	cba.blendEnable = VK_TRUE;
-	cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-	cba.colorBlendOp = VK_BLEND_OP_ADD;
-	cba.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	cba.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-
-	VkPipelineColorBlendStateCreateInfo cbs = {};
-	cbs.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	if (!useOffscreenLayout)
+	for (RenderPass* p : _renderPasses)
 	{
-		cbs.attachmentCount = 1;
-		cbs.pAttachments = &cba;
+		if (p->type() == type)
+			return p;
 	}
-	cbs.logicOp = VK_LOGIC_OP_COPY;
 
-	VkPipelineInputAssemblyStateCreateInfo ias = {};
-	ias.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	ias.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-	ias.primitiveRestartEnable = VK_FALSE;
-
-	VkPipelineMultisampleStateCreateInfo mss = {};
-	mss.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	mss.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-	VkPipelineRasterizationStateCreateInfo rs = {};
-	rs.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rs.cullMode = VK_CULL_MODE_BACK_BIT;
-	rs.polygonMode = VK_POLYGON_MODE_FILL;
-	rs.lineWidth = 1.0f;
-	rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-	rs.depthBiasEnable = VK_TRUE;
-	rs.depthBiasConstantFactor = 0.005f;
-	rs.depthBiasSlopeFactor = 0.8f;
-
-	VkVertexInputBindingDescription vbs = {};
-	vbs.binding = 0;
-	vbs.stride = sizeof(Vertex);
-	vbs.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-	const int VTX_ATTR_COUNT = 4;
-	VkVertexInputAttributeDescription vtxAttrs[VTX_ATTR_COUNT] = {};
-	vtxAttrs[0].binding = 0;
-	vtxAttrs[0].location = 0;
-	vtxAttrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-	vtxAttrs[0].offset = offsetof(Vertex, position);
-
-	vtxAttrs[1].binding = 0;
-	vtxAttrs[1].location = 1;
-	vtxAttrs[1].format = VK_FORMAT_R32G32_SFLOAT;
-	vtxAttrs[1].offset = offsetof(Vertex, uv);
-
-	vtxAttrs[2].binding = 0;
-	vtxAttrs[2].location = 2;
-	vtxAttrs[2].format = VK_FORMAT_R32G32B32_SFLOAT;
-	vtxAttrs[2].offset = offsetof(Vertex, normal);
-
-	vtxAttrs[3].binding = 0;
-	vtxAttrs[3].location = 3;
-	vtxAttrs[3].format = VK_FORMAT_R8_UINT;
-	vtxAttrs[3].offset = offsetof(Vertex, materialId);
-
-	VkPipelineVertexInputStateCreateInfo vis = {};
-	vis.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vis.vertexBindingDescriptionCount = 1;
-	vis.pVertexBindingDescriptions = &vbs;
-	vis.vertexAttributeDescriptionCount = VTX_ATTR_COUNT;
-	vis.pVertexAttributeDescriptions = vtxAttrs;
-
-	//Set dynamically.
-	VkRect2D sc = {};
-	VkViewport vp = {};
-
-	VkPipelineViewportStateCreateInfo vps = {};
-	vps.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	vps.viewportCount = 1;
-	vps.scissorCount = 1;
-	vps.pViewports = &vp;
-	vps.pScissors = &sc;
-
-	VkPipelineDepthStencilStateCreateInfo dss = {};
-	dss.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	dss.depthTestEnable = VK_TRUE;
-	dss.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-	dss.depthWriteEnable = VK_TRUE;
-
-	VkDynamicState dynStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-	VkPipelineDynamicStateCreateInfo dys = {};
-	dys.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dys.dynamicStateCount = 2;
-	dys.pDynamicStates = dynStates;
-
-	VkGraphicsPipelineCreateInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	info.layout = useOffscreenLayout ? _offscreenLayout : _pipelineLayout;
-	info.renderPass = useOffscreenLayout ? _offscreenPass : _renderPass;
-	info.stageCount = 2;
-	info.subpass = useOffscreenLayout ? 0 : 0;
-	info.pStages = stages;
-	info.pColorBlendState = &cbs;
-	info.pInputAssemblyState = &ias;
-	info.pMultisampleState = &mss;
-	info.pRasterizationState = &rs;
-	info.pVertexInputState = &vis;
-	info.pViewportState = &vps;
-	info.pDepthStencilState = &dss;
-	info.pDynamicState = &dys;
-
-	VkCheck(vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline));
-
-	_pipelines[shaderName] = pipeline;
-	return _pipelines[shaderName];
+	return nullptr;
 }
 
 Uniform* VulkanImpl::getUniform(const std::string& name)
@@ -311,14 +164,9 @@ void VulkanImpl::init(const Window& window)
 	_createCommandPool();
 	ShaderCache::init();
 	TextureCache::init();
-	_createRenderPass();
 	_createSwapChain();
-	_createLayouts();
 	_createSampler();
-	_createDescriptorSets();
-	_allocateCommandBuffers();
-
-	_shadowMap = new ShadowMap(*this);
+	_createUniforms();
 }
 
 void VulkanImpl::recordCommandBuffers(const Scene* scene)
@@ -327,13 +175,7 @@ void VulkanImpl::recordCommandBuffers(const Scene* scene)
 	vkDeviceWaitIdle(_device);
 
 	const std::vector<VkFramebuffer> framebuffers = _swapChain->framebuffers();
-	const VkExtent2D extent = _swapChain->surfaceCapabilities().currentExtent;
-
-	VkClearValue clearValues[] = {
-		{ 0.0f, 0.0f, 0.2f, 1.0f }, //Clear color
-		{ 1.0f, 0.0f } //Depth stencil
-	};
-
+	
 	for (size_t i = 0; i < _commandBuffers.size(); i++)
 	{
 		VkCommandBuffer buffer = _commandBuffers[i];
@@ -342,35 +184,10 @@ void VulkanImpl::recordCommandBuffers(const Scene* scene)
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 
-		VkRenderPassBeginInfo info = {};
-		info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		info.clearValueCount = 2;
-		info.pClearValues = clearValues;
-		info.renderPass = _renderPass;
-		info.renderArea.offset = { 0, 0 };
-		info.renderArea.extent = extent;
-		info.framebuffer = framebuffers[i];
-
 		VkCheck(vkBeginCommandBuffer(buffer, &beginInfo));
 
-		if(_shadowMap)
-			_shadowMap->render(buffer, scene);
-
-		VkViewport viewport = { 0, 0, (float)extent.width, (float)extent.height, 0.0f, 1.0f };
-		VkRect2D scissor = { 0, 0, extent.width, extent.height };
-
-		vkCmdSetViewport(buffer, 0, 1, &viewport);
-		vkCmdSetScissor(buffer, 0, 1, &scissor);
-
-		vkCmdBeginRenderPass(buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
-
-		if(_shadowMap)
-			bindDescriptorSet(buffer, SET_BINDING_SHADOW, _shadowMap->set());
-
-		if(scene)
-			scene->draw(buffer);
-
-		vkCmdEndRenderPass(buffer);
+		for (RenderPass* pass : _renderPasses)
+			pass->render(buffer, framebuffers[i]);
 
 		VkCheck(vkEndCommandBuffer(buffer));
 	}
@@ -380,6 +197,7 @@ void VulkanImpl::recreateSwapChain(uint32_t width, uint32_t height)
 {
 	vkDeviceWaitIdle(_device);
 	_swapChain->resize(width, height);
+	_allocateCommandBuffers();
 }
 
 void VulkanImpl::render()
@@ -458,28 +276,6 @@ void VulkanImpl::submitOneShotCmdBuffer(VkCommandBuffer buffer) const
 	vkFreeCommandBuffers(_device, _commandPool, 1, &buffer);
 }
 
-void VulkanImpl::updatePushConstants(VkCommandBuffer buffer, size_t size, void* data) const
-{
-	vkCmdPushConstants(buffer, _pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32_t)size, data);
-}
-
-void VulkanImpl::updateSampledImage(VkImageView view) const
-{
-	VkDescriptorImageInfo info = {};
-	info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	info.imageView = view;
-
-	VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-	write.descriptorCount = 1;
-	write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-	write.dstSet = _descriptorSets[SET_BINDING_MODEL];
-	write.dstBinding = 1;
-	write.dstArrayElement = 0;
-	write.pImageInfo = &info;
-
-	vkUpdateDescriptorSets(_device, 1, &write, 0, nullptr);
-}
-
 void VulkanImpl::updateUniform(const std::string& name, void* data, size_t size, size_t offset)
 {
 	if (_uniforms.find(name) == _uniforms.end())
@@ -492,6 +288,9 @@ void VulkanImpl::updateUniform(const std::string& name, void* data, size_t size,
 
 void VulkanImpl::_allocateCommandBuffers()
 {
+	if (_commandBuffers.size())
+		_commandBuffers.clear();
+
 	const std::vector<VkFramebuffer> framebuffers = _swapChain->framebuffers();
 	_commandBuffers.resize(framebuffers.size());
 
@@ -517,29 +316,21 @@ void VulkanImpl::_cleanup()
 
 	_uniforms.clear();
 
-	vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
-
 	vkDestroySampler(_device, _sampler, nullptr);
 	ShaderCache::clear();
 	TextureCache::shutdown();
 
 	destroyPipelines();
 
-	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
-	vkDestroyPipelineLayout(_device, _offscreenLayout, nullptr);
-
-	for (VkDescriptorSetLayout layout : _descriptorLayouts)
+	for (RenderPass* p : _renderPasses)
 	{
-		vkDestroyDescriptorSetLayout(_device, layout, nullptr);
+		delete p;
 	}
-
-	delete _shadowMap;
-	_shadowMap = nullptr;
+	_renderPasses.clear();
 
 	delete _swapChain;
 	_swapChain = nullptr;
 
-	vkDestroyRenderPass(_device, _renderPass, nullptr);
 	vkDestroyCommandPool(_device, _commandPool, nullptr);
 	vkDestroyDevice(_device, nullptr);
 	_device = VK_NULL_HANDLE;
@@ -564,141 +355,6 @@ void VulkanImpl::_createCommandPool()
 	info.queueFamilyIndex = _graphicsQueue.index;
 
 	VkCheck(vkCreateCommandPool(_device, &info, nullptr, &_commandPool));
-}
-
-void VulkanImpl::_createDescriptorSets()
-{
-	VkDescriptorPoolSize sizes[4] = {};
-	//Camera matrix & lights
-	sizes[0].descriptorCount = 2;
-	sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-
-	//Sampler
-	sizes[1].descriptorCount = 1;
-	sizes[1].type = VK_DESCRIPTOR_TYPE_SAMPLER;
-
-	//Textures
-	sizes[2].descriptorCount = MAX_TEXTURES * MAX_MATERIALS + 2;
-	sizes[2].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-
-	//Model & material data
-	sizes[3].descriptorCount = 2 + MAX_MATERIALS;
-	sizes[3].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-
-	VkDescriptorPoolCreateInfo pool = {};
-	pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	pool.poolSizeCount = 4;
-	pool.pPoolSizes = sizes;
-	pool.maxSets = SET_BINDING_COUNT + MAX_TEXTURES;
-
-	VkCheck(vkCreateDescriptorPool(_device, &pool, nullptr, &_descriptorPool));
-
-	VkDescriptorSetAllocateInfo alloc = {};
-	alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	alloc.descriptorPool = _descriptorPool;
-	alloc.pSetLayouts = _descriptorLayouts.data();
-	alloc.descriptorSetCount = (uint32_t)_descriptorLayouts.size();
-
-	_descriptorSets.resize(SET_BINDING_COUNT);
-	
-	VkCheck(vkAllocateDescriptorSets(_device, &alloc, _descriptorSets.data()));
-
-	{
-		VkDescriptorBufferInfo buff = {};
-		Uniform* uniform = createUniform("camera", sizeof(CameraUniform));
-		buff.buffer = uniform->localBuffer.buffer;
-		buff.offset = 0;
-		buff.range = uniform->size;
-
-		VkWriteDescriptorSet writes[1] = {};
-		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[0].descriptorCount = 1;
-		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		writes[0].dstSet = _descriptorSets[SET_BINDING_CAMERA];
-		writes[0].dstBinding = 0;
-		writes[0].dstArrayElement = 0;
-		writes[0].pBufferInfo = &buff;
-
-		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
-	}
-
-	{
-		size_t range = getAlignedRange(sizeof(ModelUniform));
-
-		VkDescriptorBufferInfo buff = {};
-		Uniform* uniform = createUniform("model", range * MAX_MODELS);
-		buff.buffer = uniform->localBuffer.buffer;
-		buff.offset = 0;
-		buff.range = range;
-
-		VkWriteDescriptorSet writes[2] = {};
-		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[0].descriptorCount = 1;
-		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-		writes[0].dstSet = _descriptorSets[SET_BINDING_MODEL];
-		writes[0].dstBinding = 0;
-		writes[0].dstArrayElement = 0;
-		writes[0].pBufferInfo = &buff;
-
-		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
-	}
-
-	{
-		VkDescriptorImageInfo img = {};
-		img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		img.sampler = _sampler;
-
-		VkWriteDescriptorSet writes[1] = {};
-		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[0].descriptorCount = 1;
-		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-		writes[0].dstSet = _descriptorSets[SET_BINDING_SAMPLER];
-		writes[0].dstBinding = 0;
-		writes[0].dstArrayElement = 0;
-		writes[0].pImageInfo = &img;
-
-		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
-	}
-
-	{
-		VkDescriptorBufferInfo buff = {};
-		Uniform* uniform = createUniform("light", sizeof(Light));
-		buff.buffer = uniform->localBuffer.buffer;
-		buff.offset = 0;
-		buff.range = uniform->size;
-
-		VkWriteDescriptorSet writes[1] = {};
-		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[0].descriptorCount = 1;
-		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		writes[0].dstSet = _descriptorSets[SET_BINDING_LIGHTS];
-		writes[0].dstBinding = 0;
-		writes[0].dstArrayElement = 0;
-		writes[0].pBufferInfo = &buff;
-
-		vkUpdateDescriptorSets(_device, 1, writes, 0, nullptr);
-	}
-
-	{
-		size_t range = getAlignedRange(sizeof(MaterialData));
-
-		VkDescriptorBufferInfo buff = {};
-		Uniform* uniform = createUniform("material", range * MAX_MODELS);
-		buff.buffer = uniform->localBuffer.buffer;
-		buff.offset = 0;
-		buff.range = range;
-
-
-		VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-		write.descriptorCount = 1;
-		write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-		write.dstSet = _descriptorSets[SET_BINDING_MATERIAL];
-		write.dstBinding = 0;
-		write.dstArrayElement = 0;
-		write.pBufferInfo = &buff;
-
-		vkUpdateDescriptorSets(VulkanImpl::device(), 1, &write, 0, nullptr);
-	}
 }
 
 void VulkanImpl::_createInstance()
@@ -738,144 +394,6 @@ void VulkanImpl::_createInstance()
 	VkCheck(vkCreateInstance(&createInfo, nullptr, &_instance));
 }
 
-void VulkanImpl::_createLayouts()
-{
-	//Screen layout
-	{
-		VkDescriptorSetLayoutBinding bindings[2] = {};
-		bindings[0].binding = 0;
-		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-		bindings[0].descriptorCount = 1;
-
-		VkDescriptorSetLayoutCreateInfo info = {};
-		info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		info.bindingCount = 1;
-		info.pBindings = bindings;
-
-		_descriptorLayouts.resize(SET_BINDING_COUNT);
-
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_CAMERA]));
-
-		info.bindingCount = 1;
-		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_MODEL]));
-
-		info.bindingCount = 1;
-		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-		bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-		bindings[0].descriptorCount = 1;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_SAMPLER]));
-
-		info.bindingCount = 1;
-		bindings[0].binding = 0;
-		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		bindings[0].descriptorCount = MAX_MATERIALS;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_TEXTURE]));
-
-		info.bindingCount = 1;
-		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		bindings[0].descriptorCount = 1;
-		bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_LIGHTS]));
-
-		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-		bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_SHADOW]));
-
-		bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-		bindings[0].descriptorCount = 1;
-		VkCheck(vkCreateDescriptorSetLayout(_device, &info, nullptr, &_descriptorLayouts[SET_BINDING_MATERIAL]));
-
-		VkPushConstantRange pushConstants;
-		pushConstants.offset = 0;
-		pushConstants.size = sizeof(uint32_t);
-		pushConstants.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-		VkPipelineLayoutCreateInfo layoutCreateInfo = {};
-		layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		layoutCreateInfo.pSetLayouts = _descriptorLayouts.data();
-		layoutCreateInfo.setLayoutCount = (uint32_t)_descriptorLayouts.size();
-		layoutCreateInfo.pushConstantRangeCount = 1;
-		layoutCreateInfo.pPushConstantRanges = &pushConstants;
-
-		VkCheck(vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_pipelineLayout));
-
-		VkCheck(vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_offscreenLayout));
-	}
-
-
-	//Offscreen layout
-	{
-		//VkCheck(vkCreatePipelineLayout(_device, &layoutCreateInfo, nullptr, &_offscreenLayout));
-	}
-}
-
-void VulkanImpl::_createRenderPass()
-{
-	//Color
-	VkAttachmentDescription attachDesc = {};
-	attachDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-	attachDesc.format = VK_FORMAT_B8G8R8A8_UNORM;
-	attachDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-	attachDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-	VkAttachmentReference attachRef = {};
-	attachRef.attachment = 0;
-	attachRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-	VkSubpassDescription subpass = {};
-	subpass.colorAttachmentCount = 1;
-	subpass.pColorAttachments = &attachRef;
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-
-
-	//Depth
-	VkAttachmentReference depthAttach = {};
-	depthAttach.attachment = 1;
-	depthAttach.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-	VkSubpassDescription depthPass = {};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.pDepthStencilAttachment = &depthAttach;
-
-	VkAttachmentDescription depthDesc = {};
-	depthDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-	depthDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	depthDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	depthDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	depthDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	depthDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	depthDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	depthDesc.format = VK_FORMAT_D32_SFLOAT;
-
-
-	VkSubpassDependency dependency = {};
-	dependency.srcAccessMask = 0;
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.dstSubpass = 0;
-
-	VkAttachmentDescription attachments[] = { attachDesc, depthDesc };
-	VkRenderPassCreateInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	info.attachmentCount = 2;
-	info.pAttachments = attachments;
-	info.subpassCount = 1;
-	info.pSubpasses = &subpass;
-	info.dependencyCount = 1;
-	info.pDependencies = &dependency;
-
-	VkCheck(vkCreateRenderPass(_device, &info, nullptr, &_renderPass));
-}
-
 void VulkanImpl::_createSampler()
 {
 	VkSamplerCreateInfo samplerInfo = {};
@@ -911,6 +429,14 @@ void VulkanImpl::_createSwapChain()
 	_swapChain = new SwapChain(*this);
 	_swapChain->init(_surface);
 	_extent = _swapChain->surfaceCapabilities().currentExtent;
+}
+
+void VulkanImpl::_createUniforms()
+{
+	createUniform("camera", sizeof(CameraUniform));
+	createUniform("model", getAlignedRange(sizeof(ModelUniform)) * MAX_MODELS);
+	createUniform("light", sizeof(Light));
+	createUniform("material", getAlignedRange(sizeof(MaterialData)) * MAX_MODELS);
 }
 
 void VulkanImpl::_initDevice()

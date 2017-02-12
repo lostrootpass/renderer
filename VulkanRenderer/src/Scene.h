@@ -4,11 +4,12 @@
 #include <vector>
 #include "VulkanImpl.h"
 #include "Light.h"
+#include "Camera.h"
 
 #include <SDL_keyboard.h>
 
-class Camera;
 class Model;
+class RenderPass;
 
 class Scene
 {
@@ -18,9 +19,9 @@ public:
 
 	void addModel(const std::string& name, float scale = 1.0f);
 
-	void draw(VkCommandBuffer cmd) const;
+	void draw(VkCommandBuffer cmd, RenderPass& pass) const;
 
-	void drawShadow(VkCommandBuffer cmd) const;
+	void drawShadow(VkCommandBuffer cmd, RenderPass& pass) const;
 
 	void keyDown(SDL_Keycode key);
 
@@ -29,6 +30,11 @@ public:
 	void resize(uint32_t width, uint32_t height);
 
 	void update(float dtime);
+
+	inline VkExtent2D viewport() const
+	{
+		return { _camera->width(), _camera->height() };
+	}
 
 private:
 	std::vector<Model*> _models;

@@ -10,7 +10,8 @@
 static uint32_t MODEL_INDEX = 0;
 
 Model::Model(const std::string& name, VulkanImpl* renderer)
-	: _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f)), _scale(1.0f)
+	: _name(name), _position(glm::vec3(0.0f, 0.0f, 0.0f)), _scale(1.0f),
+	_pipeline(VK_NULL_HANDLE), _shadowPipeline(VK_NULL_HANDLE)
 {
 	_load(renderer);
 	_index = MODEL_INDEX;
@@ -23,21 +24,24 @@ Model::~Model()
 		delete a;
 }
 
-void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
+void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pass)
 {
-	renderer->bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
+	pass.bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
 	
 	std::vector<uint32_t> descOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(ModelUniform))*_index};
-	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
+	pass.bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
 
 	std::vector<uint32_t> matOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(MaterialData))*_index};
-	renderer->bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
+	pass.bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
 
 	for (TextureArray* m : _materials)
 	{
 		if(m && m->set())
-			renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, m->set());
+			pass.bindDescriptorSet(cmd, SET_BINDING_TEXTURE, m->set());
 	}
+
+	if (_pipeline == VK_NULL_HANDLE)
+		_pipeline = pass.getPipelineForShader("shaders/common/model");
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 
@@ -52,21 +56,24 @@ void Model::draw(VulkanImpl* renderer, VkCommandBuffer cmd)
 	}
 }
 
-void Model::drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd)
+void Model::drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd, RenderPass& pass)
 {
-	renderer->bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
+	pass.bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
 
 	std::vector<uint32_t> descOffsets = { (uint32_t)renderer->getAlignedRange(sizeof(ModelUniform))*_index };
-	renderer->bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
+	pass.bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
 
 	std::vector<uint32_t> matOffsets = { (uint32_t)renderer->getAlignedRange(sizeof(MaterialData))*_index };
-	renderer->bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
+	pass.bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
 
 	for (TextureArray* m : _materials)
 	{
 		if (m && m->set())
-			renderer->bindDescriptorSet(cmd, SET_BINDING_TEXTURE, m->set());
+			pass.bindDescriptorSet(cmd, SET_BINDING_TEXTURE, m->set());
 	}
+
+	if (!_shadowPipeline)
+		_shadowPipeline = pass.getPipelineForShader("shaders/common/shadowmap");
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowPipeline);
 
@@ -81,8 +88,8 @@ void Model::drawShadow(VulkanImpl* renderer, VkCommandBuffer cmd)
 
 void Model::reload(VulkanImpl* renderer)
 {
-	_pipeline = renderer->getPipelineForShader("shaders/common/model");
-	_shadowPipeline = renderer->getPipelineForShader("shaders/common/shadowmap", true);
+	_pipeline = VK_NULL_HANDLE;
+	_shadowPipeline = VK_NULL_HANDLE;
 }
 
 void Model::update(VulkanImpl* renderer, float dtime)
@@ -110,8 +117,6 @@ void Model::_load(VulkanImpl* renderer)
 	//char shaderName[128] = {'\0'};
 	//sprintf_s(shaderName, "models/%s/%s", _name.c_str(), _name.c_str());
 	//_pipeline = renderer->getPipelineForShader(shaderName);
-	_pipeline = renderer->getPipelineForShader("shaders/common/model");
-	_shadowPipeline = renderer->getPipelineForShader("shaders/common/shadowmap", true);
 
 	//TODO: fix allocation inefficiencies - use one big buffer instead of lots of small ones.
 	for (Shape& s : _shapes)

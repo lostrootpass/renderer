@@ -43,27 +43,26 @@ void Scene::addModel(const std::string& name, float scale)
 	_renderer->recordCommandBuffers(this);
 }
 
-void Scene::draw(VkCommandBuffer cmd) const
+void Scene::draw(VkCommandBuffer cmd, RenderPass& pass) const
 {
-	_renderer->updatePushConstants(cmd, sizeof(uint32_t), (void*)&_sceneFlags);
+	pass.updatePushConstants(cmd, sizeof(uint32_t), (void*)&_sceneFlags);
 
-	_renderer->bindDescriptorSetById(cmd, SET_BINDING_LIGHTS, nullptr);
-	_renderer->bindDescriptorSetById(cmd, SET_BINDING_CAMERA, nullptr);
+	pass.bindDescriptorSetById(cmd, SET_BINDING_LIGHTS, nullptr);
+	pass.bindDescriptorSetById(cmd, SET_BINDING_CAMERA, nullptr);
 
 	for (Model* model : _models)
 	{
-		model->draw(_renderer, cmd);
+		model->draw(_renderer, cmd, pass);
 	}
 }
 
-void Scene::drawShadow(VkCommandBuffer cmd) const
+void Scene::drawShadow(VkCommandBuffer cmd, RenderPass& pass) const
 {
-	_renderer->bindDescriptorSetById(cmd, SET_BINDING_LIGHTS, nullptr, true);
-	_renderer->bindDescriptorSetById(cmd, SET_BINDING_CAMERA, nullptr, true);
-
+	pass.bindDescriptorSetById(cmd, SET_BINDING_LIGHTS, nullptr);
+	
 	for (Model* model : _models)
 	{
-		model->drawShadow(_renderer, cmd);
+		model->drawShadow(_renderer, cmd, pass);
 	}
 }
 

@@ -52,8 +52,15 @@ public:
 		return -_translation[3];
 	}
 
+	inline uint32_t height() const
+	{
+		return _height;
+	}
+
 	inline void updateViewport(uint32_t viewportWidth, uint32_t viewportHeight)
 	{
+		_width = viewportWidth;
+		_height = viewportHeight;
 		_aspectRatio = (viewportWidth / (float)viewportHeight);
 	}
 
@@ -62,10 +69,18 @@ public:
 		return _orientation * _translation;
 	}
 
+	inline uint32_t width() const
+	{
+		return _width;
+	}
+
 private:
 	glm::mat4 _translation;
 	glm::mat4 _orientation;
 	glm::quat _rotation;
+
+	uint32_t _width;
+	uint32_t _height;
 
 	float _fov;
 	float _aspectRatio;

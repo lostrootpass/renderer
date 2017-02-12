@@ -1,6 +1,8 @@
 #include "Core.h"
 #include "Window.h"
 #include "Scene.h"
+#include "renderpass/ShadowMapRenderPass.h"
+#include "renderpass/SceneRenderPass.h"
 
 #include <iostream>
 #include <chrono>
@@ -57,6 +59,17 @@ void Core::_init()
 	_renderer->init(*_window);
 
 	_scene = new Scene(*_renderer);
+
+	RenderPass* shadow = new ShadowMapRenderPass(*_scene);
+	shadow->init(_renderer);
+	_renderer->addRenderPass(shadow);
+
+	RenderPass* scene = new SceneRenderPass(*_scene, *shadow);
+	scene->init(_renderer);
+	_renderer->addRenderPass(scene);
+
+	((ShadowMapRenderPass*)shadow)->recreateShadowMap(_renderer);
+	_renderer->recreateSwapChain();
 }
 
 void Core::_pollEvents()

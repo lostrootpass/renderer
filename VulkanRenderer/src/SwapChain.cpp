@@ -1,4 +1,5 @@
 #include "SwapChain.h"
+#include "renderpass/RenderPass.h"
 
 //VK_USE_PLATFORM_WIN32_KHR inadvertently prevents us using std::numeric_limits::max
 #undef max
@@ -24,7 +25,6 @@ void SwapChain::init(VkSurfaceKHR surface)
 	_createSwapChain();
 	_createImageViews();
 	_createDepthBuffer();
-	_createFramebuffers();
 	_createSemaphores();
 }
 
@@ -153,7 +153,7 @@ void SwapChain::_createFramebuffers()
 		info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		info.width = extent.width;
 		info.height = extent.height;
-		info.renderPass = _impl->renderPass();
+		info.renderPass = _impl->getRenderPass(RenderPassType::SCENE)->renderPass();
 		info.attachmentCount = 2;
 		info.pAttachments = attachments;
 		info.layers = 1;

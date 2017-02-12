@@ -4,6 +4,7 @@
 #include "Texture.h"
 #include "../VulkanImpl.h"
 #include "TextureCache.h"
+#include "../renderpass/SceneRenderPass.h"
 
 Texture::Texture(const std::string& path, VulkanImpl* renderer)
 	: _path(path), _format(VK_FORMAT_R8G8B8A8_UNORM), _set(VK_NULL_HANDLE), _layers(1),
@@ -29,10 +30,12 @@ Texture::~Texture()
 
 void Texture::bind(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)
 {
+	SceneRenderPass* p = (SceneRenderPass*)(renderer->getRenderPass(RenderPassType::SCENE));
+
 	if (set == VK_NULL_HANDLE)
 	{
 		if (_set == VK_NULL_HANDLE)
-			renderer->allocateTextureDescriptor(_set);
+			p->allocateTextureDescriptor(_set);
 
 		_updateSet(renderer, _set, binding, index);
 	}
@@ -193,7 +196,8 @@ void Texture::_createInMemory(VulkanImpl* renderer)
 
 	VkCheck(vkCreateImageView(VulkanImpl::device(), &view, nullptr, &_view));
 
-	renderer->allocateTextureDescriptor(_set, SET_BINDING_SHADOW);
+	SceneRenderPass* p = (SceneRenderPass*)(renderer->getRenderPass(RenderPassType::SCENE));
+	p->allocateTextureDescriptor(_set, SET_BINDING_SHADOW);
 }
 
 void Texture::_updateSet(VulkanImpl* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)
