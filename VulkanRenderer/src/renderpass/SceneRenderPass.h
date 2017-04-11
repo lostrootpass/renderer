@@ -13,11 +13,11 @@ public:
 
 	~SceneRenderPass();
 
-	void SceneRenderPass::allocateTextureDescriptor(VkDescriptorSet& set, SetBinding binding = SET_BINDING_TEXTURE);
+	void allocateTextureDescriptor(VkDescriptorSet& set, SetBinding binding = SET_BINDING_TEXTURE);
 
 	virtual void init(Renderer* renderer) override;
 
-	virtual void render(VkCommandBuffer cmd, VkFramebuffer framebuffer = VK_NULL_HANDLE) override;
+	virtual void render(VkCommandBuffer cmd, const Framebuffer* framebuffer = nullptr) override;
 
 	inline virtual RenderPassType type() {
 		return RenderPassType::SCENE;

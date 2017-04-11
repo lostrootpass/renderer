@@ -42,6 +42,8 @@ public:
 
 	void addRenderPass(RenderPass* renderPass);
 
+	void allocateTextureDescriptor(VkDescriptorSet& set, SetBinding binding = SET_BINDING_TEXTURE);
+
 	void copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset = 0) const;
 
 	void clearShaderCache();
@@ -75,6 +77,11 @@ public:
 	void submitOneShotCmdBuffer(VkCommandBuffer buffer) const;
 
 	void updateUniform(const std::string& name, void* data, size_t size, size_t offset = 0);
+
+	inline const std::vector<Framebuffer>& backbufferRenderTargets() const
+	{
+		return _backbufferRenderTargets;
+	}
 
 	inline const VkCommandBuffer commandBuffer(size_t idx) const
 	{
@@ -119,9 +126,19 @@ public:
 		return _physicalProperties;
 	}
 
+	inline const VkRenderPass renderPass() const
+	{
+		return _renderPasses.back()->renderPass();
+	}
+
 	inline VkSampler sampler() const
 	{
 		return _sampler;
+	}
+
+	inline const SwapChain* swapChain() const
+	{
+		return _swapChain;
 	}
 
 	inline const VkSurfaceKHR surface() const
@@ -138,6 +155,7 @@ private:
 
 	std::vector<VkCommandBuffer> _commandBuffers;
 	std::vector<RenderPass*> _renderPasses;
+	std::vector<Framebuffer> _backbufferRenderTargets;
 	std::unordered_map<std::string, Uniform*> _uniforms;
 
 	static VkDevice _device;
@@ -150,11 +168,17 @@ private:
 	VkExtent2D _extent;
 	VkPhysicalDeviceProperties _physicalProperties;
 
+	//Shared texture descriptors.
+	VkDescriptorPool _textureDescriptorPool;
+	VkDescriptorSetLayout _textureLayout;
+	VkDescriptorSetLayout _shadowLayout;
+
 	QueueInfo _graphicsQueue;
 	QueueInfo _presentQueue;
 
 	SwapChain* _swapChain;
 
+	void _allocateBackbufferRenderTargets();
 	void _allocateCommandBuffers();
 	void _cleanup();
 	void _createCommandPool();
@@ -162,6 +186,7 @@ private:
 	void _createSampler();
 	void _createSwapChain();
 	void _createUniforms();
+	void _destroyBackbufferRenderTargets();
 	void _initDevice();
 	VkPhysicalDevice _pickPhysicalDevice();
 	void _queryDeviceQueueFamilies(VkPhysicalDevice device);

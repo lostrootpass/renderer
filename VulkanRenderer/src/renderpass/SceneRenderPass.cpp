@@ -32,7 +32,7 @@ void SceneRenderPass::init(Renderer* renderer)
 	_createDescriptorSets(renderer);
 }
 
-void SceneRenderPass::render(VkCommandBuffer cmd, VkFramebuffer framebuffer)
+void SceneRenderPass::render(VkCommandBuffer cmd, const Framebuffer* framebuffer)
 {
 	VkClearValue clearValues[] = {
 		{ 0.0f, 0.0f, 0.2f, 1.0f }, //Clear color
@@ -48,7 +48,7 @@ void SceneRenderPass::render(VkCommandBuffer cmd, VkFramebuffer framebuffer)
 	info.renderPass = _renderPass;
 	info.renderArea.offset = { 0, 0 };
 	info.renderArea.extent = _extent;
-	info.framebuffer = framebuffer;
+	info.framebuffer = framebuffer->framebuffer;
 
 	VkViewport viewport = { 0, 0, (float)_extent.width, (float)_extent.height, 0.0f, 1.0f };
 	VkRect2D scissor = { 0, 0, _extent.width, _extent.height };
@@ -425,8 +425,8 @@ void SceneRenderPass::_createRenderPass()
 	depthDesc.samples = VK_SAMPLE_COUNT_1_BIT;
 	depthDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	depthDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	depthDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	depthDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depthDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+	depthDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	depthDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	depthDesc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	depthDesc.format = VK_FORMAT_D32_SFLOAT;

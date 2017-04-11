@@ -5,11 +5,13 @@
 #include <string>
 #include <unordered_map>
 #include "../texture/Texture.h"
+#include "../Framebuffer.h"
 
 enum class RenderPassType
 {
 	SHADOWMAP,
-	SCENE
+	SCENE,
+	POSTPROCESS
 };
 
 class Renderer;
@@ -35,7 +37,7 @@ public:
 
 	virtual void init(Renderer* renderer) = 0;
 
-	virtual void render(VkCommandBuffer cmd, VkFramebuffer framebuffer = VK_NULL_HANDLE) = 0;
+	virtual void render(VkCommandBuffer cmd, const Framebuffer* framebuffer = nullptr) = 0;
 
 	void updatePushConstants(VkCommandBuffer cmd, size_t size, void* data) const;
 

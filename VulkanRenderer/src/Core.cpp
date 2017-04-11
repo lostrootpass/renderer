@@ -3,6 +3,7 @@
 #include "Scene.h"
 #include "renderpass/ShadowMapRenderPass.h"
 #include "renderpass/SceneRenderPass.h"
+#include "renderpass/PostProcessRenderPass.h"
 
 #include <iostream>
 #include <chrono>
@@ -60,15 +61,13 @@ void Core::_init()
 
 	_scene = new Scene(*_renderer);
 
+	//TODO: specify/load renderpasses elsewhere
 	RenderPass* shadow = new ShadowMapRenderPass(*_scene);
-	shadow->init(_renderer);
 	_renderer->addRenderPass(shadow);
+	_renderer->addRenderPass(new SceneRenderPass(*_scene, *shadow));
+	_renderer->addRenderPass(new PostProcessRenderPass(*_scene));
 
-	RenderPass* scene = new SceneRenderPass(*_scene, *shadow);
-	scene->init(_renderer);
-	_renderer->addRenderPass(scene);
 
-	((ShadowMapRenderPass*)shadow)->recreateShadowMap(_renderer);
 	_renderer->recreateSwapChain();
 }
 

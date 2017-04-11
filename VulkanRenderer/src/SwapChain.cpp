@@ -1,5 +1,4 @@
 #include "SwapChain.h"
-#include "renderpass/RenderPass.h"
 
 //VK_USE_PLATFORM_WIN32_KHR inadvertently prevents us using std::numeric_limits::max
 #undef max
@@ -83,17 +82,15 @@ void SwapChain::_cleanup()
 	vkDestroyImage(Renderer::device(), _depthImage, nullptr);
 	vkFreeMemory(Renderer::device(), _depthMemory, nullptr);
 
-	for (VkFramebuffer fb : _framebuffers)
+	for (Framebuffer& fb : _framebuffers)
 	{
-		vkDestroyFramebuffer(Renderer::device(), fb, nullptr);
+		if(fb.framebuffer)
+			vkDestroyFramebuffer(Renderer::device(), fb.framebuffer, nullptr);
+
+		if(fb.view)
+			vkDestroyImageView(Renderer::device(), fb.view, nullptr);
 	}
 	_framebuffers.clear();
-
-	for (VkImageView view : _imageViews)
-	{
-		vkDestroyImageView(Renderer::device(), view, nullptr);
-	}
-	_imageViews.clear();
 }
 
 void SwapChain::_createDepthBuffer()
@@ -143,41 +140,39 @@ void SwapChain::_createFramebuffers()
 {
 	VkExtent2D extent = _swapChainInfo.surfaceCapabilities.currentExtent;
 
-	for (VkImageView view : _imageViews)
+	for (Framebuffer& fb : _framebuffers)
 	{
 		const VkImageView attachments[] = {
-			view, _depthView
+			fb.view, _depthView
 		};
 
 		VkFramebufferCreateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		info.width = extent.width;
 		info.height = extent.height;
-		info.renderPass = _impl->getRenderPass(RenderPassType::SCENE)->renderPass();
+		info.renderPass = _impl->renderPass();
 		info.attachmentCount = 2;
 		info.pAttachments = attachments;
 		info.layers = 1;
 		
-
-		VkFramebuffer framebuffer;
-		VkCheck(vkCreateFramebuffer(Renderer::device(), &info, nullptr, &framebuffer));
-
-		_framebuffers.push_back(framebuffer);
+		VkCheck(vkCreateFramebuffer(Renderer::device(), &info, nullptr, &(fb.framebuffer)));
 	}
 }
 
 void SwapChain::_createImageViews()
 {
-	uint32_t imageCount;
-	VkCheck(vkGetSwapchainImagesKHR(Renderer::device(), _vkSwapchain, &imageCount, nullptr));
-	_images.resize(imageCount);
-	VkCheck(vkGetSwapchainImagesKHR(Renderer::device(), _vkSwapchain, &imageCount, _images.data()));
+	std::vector<VkImage> images;
+	images.resize(_swapChainInfo.imageCount);
+	_framebuffers.resize(_swapChainInfo.imageCount);
+	VkCheck(vkGetSwapchainImagesKHR(Renderer::device(), _vkSwapchain, &_swapChainInfo.imageCount, images.data()));
 
-	for (VkImage image : _images)
+	for (size_t i = 0; i < images.size(); ++i)
 	{
+		_framebuffers[i].image = images[i];
+
 		VkImageViewCreateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		info.image = image;
+		info.image = _framebuffers[i].image;
 		info.format = VK_FORMAT_B8G8R8A8_UNORM;
 		info.viewType = VK_IMAGE_VIEW_TYPE_2D;
 
@@ -192,10 +187,7 @@ void SwapChain::_createImageViews()
 		info.subresourceRange.baseArrayLayer = 0;
 		info.subresourceRange.layerCount = 1;
 
-		VkImageView view;
-		VkCheck(vkCreateImageView(Renderer::device(), &info, nullptr, &view));
-
-		_imageViews.push_back(view);
+		VkCheck(vkCreateImageView(Renderer::device(), &info, nullptr, &(_framebuffers[i].view)));
 	}
 }
 
@@ -253,6 +245,8 @@ void SwapChain::_createSwapChain()
 	}
 
 	_vkSwapchain = newSwapchain;
+
+	VkCheck(vkGetSwapchainImagesKHR(Renderer::device(), _vkSwapchain, &_swapChainInfo.imageCount, nullptr));
 }
 
 void SwapChain::_populateSwapChainInfo()

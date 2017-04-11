@@ -2,6 +2,7 @@
 #define SWAP_CHAIN_H_
 
 #include "Renderer.h"
+#include "Framebuffer.h"
 #include <vector>
 
 struct SwapChainInfo
@@ -9,7 +10,9 @@ struct SwapChainInfo
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
 	std::vector<VkSurfaceFormatKHR> surfaceFormats;
 	std::vector<VkPresentModeKHR> presentModes;
+	uint32_t imageCount;
 };
+
 
 class SwapChain
 {
@@ -41,15 +44,13 @@ public:
 		return _swapChainInfo.presentModes;
 	}
 
-	inline const std::vector<VkFramebuffer>& framebuffers() const
+	inline const std::vector<Framebuffer>& framebuffers() const
 	{
 		return _framebuffers;
 	}
 
 private:
-	std::vector<VkImage> _images;
-	std::vector<VkImageView> _imageViews;
-	std::vector<VkFramebuffer> _framebuffers;
+	std::vector<Framebuffer> _framebuffers;
 	Renderer* _impl;
 
 	VkSwapchainKHR _vkSwapchain;

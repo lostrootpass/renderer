@@ -25,6 +25,8 @@ void ShadowMapRenderPass::init(Renderer* renderer)
 	_createRenderPass();
 	_createPipelineLayout();
 	_createDescriptorSets(renderer);
+
+	recreateShadowMap(renderer);
 };
 
 void ShadowMapRenderPass::recreateShadowMap(Renderer* renderer)
@@ -35,7 +37,7 @@ void ShadowMapRenderPass::recreateShadowMap(Renderer* renderer)
 	_createFramebuffer();
 }
 
-void ShadowMapRenderPass::render(VkCommandBuffer cmd, VkFramebuffer)
+void ShadowMapRenderPass::render(VkCommandBuffer cmd, const Framebuffer*)
 {
 	VkClearValue clear = { 1.0f, 0.0f };
 	VkRenderPassBeginInfo info = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };

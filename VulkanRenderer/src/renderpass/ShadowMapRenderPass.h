@@ -16,7 +16,7 @@ public:
 
 	void recreateShadowMap(Renderer* renderer);
 
-	virtual void render(VkCommandBuffer cmd, VkFramebuffer) override;
+	virtual void render(VkCommandBuffer cmd, const Framebuffer*) override;
 
 	inline VkDescriptorSet set() const
 	{

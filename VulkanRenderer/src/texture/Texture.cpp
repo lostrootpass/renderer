@@ -4,7 +4,6 @@
 #include "Texture.h"
 #include "../Renderer.h"
 #include "TextureCache.h"
-#include "../renderpass/SceneRenderPass.h"
 
 Texture::Texture(const std::string& path, Renderer* renderer)
 	: _path(path), _format(VK_FORMAT_R8G8B8A8_UNORM), _set(VK_NULL_HANDLE), _layers(1),
@@ -30,12 +29,10 @@ Texture::~Texture()
 
 void Texture::bind(Renderer* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)
 {
-	SceneRenderPass* p = (SceneRenderPass*)(renderer->getRenderPass(RenderPassType::SCENE));
-
 	if (set == VK_NULL_HANDLE)
 	{
 		if (_set == VK_NULL_HANDLE)
-			p->allocateTextureDescriptor(_set);
+			renderer->allocateTextureDescriptor(_set);
 
 		_updateSet(renderer, _set, binding, index);
 	}
@@ -196,8 +193,7 @@ void Texture::_createInMemory(Renderer* renderer)
 
 	VkCheck(vkCreateImageView(Renderer::device(), &view, nullptr, &_view));
 
-	SceneRenderPass* p = (SceneRenderPass*)(renderer->getRenderPass(RenderPassType::SCENE));
-	p->allocateTextureDescriptor(_set, SET_BINDING_SHADOW);
+	renderer->allocateTextureDescriptor(_set, SET_BINDING_SHADOW);
 }
 
 void Texture::_updateSet(Renderer* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)

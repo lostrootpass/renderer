@@ -5,7 +5,7 @@
 #include "Model.h"
 #include "Camera.h"
 #include "Scene.h"
-#include "renderpass/ShadowMapRenderPass.h"
+#include "renderpass/PostProcessRenderPass.h"
 
 #include <set>
 
@@ -34,6 +34,16 @@ Renderer::~Renderer()
 void Renderer::addRenderPass(RenderPass* renderPass)
 {
 	_renderPasses.push_back(renderPass);
+	renderPass->init(this);
+}
+
+void Renderer::allocateTextureDescriptor(VkDescriptorSet& set, SetBinding binding)
+{
+	VkDescriptorSetAllocateInfo alloc = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+	alloc.descriptorSetCount = 1;
+	alloc.descriptorPool = _textureDescriptorPool;
+	alloc.pSetLayouts = binding == SET_BINDING_TEXTURE ? &_textureLayout : &_shadowLayout;
+	VkCheck(vkAllocateDescriptorSets(Renderer::device(), &alloc, &set));
 }
 
 void Renderer::copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset) const
@@ -167,6 +177,41 @@ void Renderer::init(const Window& window)
 	_createSwapChain();
 	_createSampler();
 	_createUniforms();
+
+	//create Texture descriptor
+	{
+		VkDescriptorPoolSize sizes[1] = {};
+		
+		//Textures
+		sizes[0].descriptorCount = MAX_TEXTURES * MAX_MATERIALS + 2;
+		sizes[0].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+
+		VkDescriptorPoolCreateInfo pool = {};
+		pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		pool.poolSizeCount = 1;
+		pool.pPoolSizes = sizes;
+		pool.maxSets = MAX_TEXTURES + 1;
+
+		VkCheck(vkCreateDescriptorPool(Renderer::device(), &pool, nullptr, &_textureDescriptorPool));
+
+		VkDescriptorSetLayoutBinding binding = {};
+		binding.binding = 0;
+		binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+		binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		binding.descriptorCount = MAX_TEXTURES;
+
+		VkDescriptorSetLayoutCreateInfo info = {};
+		info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		info.bindingCount = 1;
+		info.pBindings = &binding;
+
+		VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_textureLayout));
+
+		binding.descriptorCount = 1;
+		VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_shadowLayout));
+	}
+
+	//recreateSwapChain();
 }
 
 void Renderer::recordCommandBuffers(const Scene* scene)
@@ -174,8 +219,8 @@ void Renderer::recordCommandBuffers(const Scene* scene)
 	//TODO: use fences properly instead
 	vkDeviceWaitIdle(_device);
 
-	const std::vector<VkFramebuffer> framebuffers = _swapChain->framebuffers();
-	
+	//const std::vector<Framebuffer> framebuffers = _swapChain->framebuffers();
+
 	for (size_t i = 0; i < _commandBuffers.size(); i++)
 	{
 		VkCommandBuffer buffer = _commandBuffers[i];
@@ -186,8 +231,28 @@ void Renderer::recordCommandBuffers(const Scene* scene)
 
 		VkCheck(vkBeginCommandBuffer(buffer, &beginInfo));
 
-		for (RenderPass* pass : _renderPasses)
-			pass->render(buffer, framebuffers[i]);
+		/*
+		Shadow
+		In: N/A
+		Out: Shadow map
+
+		Scene
+		In: Shadow map
+		Out: Color & depth buffers
+
+		Post
+		In: Color & depth buffers
+		Out: Color buffer
+		*/
+
+		//Go through the RTs for everything up and including the second-to-last pass
+		for (size_t p = 0; p < _renderPasses.size() - 1; ++p)
+		{
+			_renderPasses[p]->render(buffer, &_backbufferRenderTargets[i]);
+		}
+
+		//For the final pass, use the swap chain.
+		_renderPasses.back()->render(buffer, &_swapChain->framebuffers()[i]);
 
 		VkCheck(vkEndCommandBuffer(buffer));
 	}
@@ -197,6 +262,7 @@ void Renderer::recreateSwapChain(uint32_t width, uint32_t height)
 {
 	vkDeviceWaitIdle(_device);
 	_swapChain->resize(width, height);
+	_allocateBackbufferRenderTargets();
 	_allocateCommandBuffers();
 }
 
@@ -286,12 +352,141 @@ void Renderer::updateUniform(const std::string& name, void* data, size_t size, s
 	copyBuffer(uniform->localBuffer, uniform->stagingBuffer, size, offset);
 }
 
+void Renderer::_allocateBackbufferRenderTargets()
+{
+	const std::vector<Framebuffer> swapChainBuffers = _swapChain->framebuffers();
+
+	_destroyBackbufferRenderTargets();
+
+	for (size_t i = 0; i < swapChainBuffers.size(); ++i)
+	{
+		Framebuffer fb = {};
+
+		//Image
+		{
+			//fb.image = swapChainBuffers[i].image;
+
+			VkImageCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+			info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+			info.tiling = VK_IMAGE_TILING_OPTIMAL;
+			info.extent = { swapChain()->surfaceCapabilities().currentExtent.width, swapChain()->surfaceCapabilities().currentExtent.height, 1 };
+			info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			info.samples = VK_SAMPLE_COUNT_1_BIT;
+			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			info.mipLevels = 1;
+			info.arrayLayers = 1;
+			info.format = VK_FORMAT_B8G8R8A8_UNORM;
+			info.imageType = VK_IMAGE_TYPE_2D;
+
+			VkCheck(vkCreateImage(Renderer::device(), &info, nullptr, &fb.image));
+
+			VkMemoryRequirements memReq;
+			vkGetImageMemoryRequirements(Renderer::device(), fb.image, &memReq);
+
+			VkMemoryAllocateInfo alloc = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+			alloc.allocationSize = memReq.size;
+			alloc.memoryTypeIndex = getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+			VkCheck(vkAllocateMemory(Renderer::device(), &alloc, nullptr, &fb.memory));
+			VkCheck(vkBindImageMemory(Renderer::device(), fb.image, fb.memory, 0));
+		}
+
+		//View
+		{
+			//fb.view = swapChainBuffers[i].view;
+
+			VkImageViewCreateInfo info = {};
+			info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			info.image = fb.image;
+			info.format = VK_FORMAT_B8G8R8A8_UNORM;
+			info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+
+			info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+			info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			info.subresourceRange.baseMipLevel = 0;
+			info.subresourceRange.levelCount = 1;
+			info.subresourceRange.baseArrayLayer = 0;
+			info.subresourceRange.layerCount = 1;
+
+			VkCheck(vkCreateImageView(Renderer::device(), &info, nullptr, &(fb.view)));
+		}
+
+		//Depth image
+		{
+			VkImageCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+			info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+			info.tiling = VK_IMAGE_TILING_OPTIMAL;
+			info.extent = { swapChain()->surfaceCapabilities().currentExtent.width, swapChain()->surfaceCapabilities().currentExtent.height, 1 };
+			info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			info.samples = VK_SAMPLE_COUNT_1_BIT;
+			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			info.mipLevels = 1;
+			info.arrayLayers = 1;
+			info.format = VK_FORMAT_D32_SFLOAT;
+			info.imageType = VK_IMAGE_TYPE_2D;
+
+			VkCheck(vkCreateImage(Renderer::device(), &info, nullptr, &fb.depthImage));
+
+			VkMemoryRequirements memReq;
+			vkGetImageMemoryRequirements(Renderer::device(), fb.depthImage, &memReq);
+
+			VkMemoryAllocateInfo alloc = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+			alloc.allocationSize = memReq.size;
+			alloc.memoryTypeIndex = getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+			VkCheck(vkAllocateMemory(Renderer::device(), &alloc, nullptr, &fb.depthMemory));
+			VkCheck(vkBindImageMemory(Renderer::device(), fb.depthImage, fb.depthMemory, 0));
+		}
+
+		//Depth view
+		{
+			VkImageViewCreateInfo view = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+			view.format = VK_FORMAT_D32_SFLOAT;
+			view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			view.image = fb.depthImage;
+			view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+			view.subresourceRange.baseMipLevel = 0;
+			view.subresourceRange.baseArrayLayer = 0;
+			view.subresourceRange.layerCount = 1;
+			view.subresourceRange.levelCount = 1;
+
+			VkCheck(vkCreateImageView(Renderer::device(), &view, nullptr, &fb.depthView));
+		}
+
+		//FB
+		{
+			//fb.framebuffer = swapChainBuffers[i].framebuffer;
+
+			const VkImageView attachments[] = {
+				fb.view, fb.depthView
+			};
+
+			VkFramebufferCreateInfo info = {};
+			info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			info.width = swapChain()->surfaceCapabilities().currentExtent.width;
+			info.height = swapChain()->surfaceCapabilities().currentExtent.height;
+			info.renderPass = renderPass();
+			info.attachmentCount = 2;
+			info.pAttachments = attachments;
+			info.layers = 1;
+
+			VkCheck(vkCreateFramebuffer(Renderer::device(), &info, nullptr, &(fb.framebuffer)));
+		}
+
+		_backbufferRenderTargets.push_back(fb);
+	}
+}
+
 void Renderer::_allocateCommandBuffers()
 {
 	if (_commandBuffers.size())
 		_commandBuffers.clear();
 
-	const std::vector<VkFramebuffer> framebuffers = _swapChain->framebuffers();
+	const std::vector<Framebuffer> framebuffers = _swapChain->framebuffers();
 	_commandBuffers.resize(framebuffers.size());
 
 	VkCommandBufferAllocateInfo info = {};
@@ -320,6 +515,10 @@ void Renderer::_cleanup()
 	ShaderCache::clear();
 	TextureCache::shutdown();
 
+	vkDestroyDescriptorPool(_device, _textureDescriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(_device, _textureLayout, nullptr);
+	vkDestroyDescriptorSetLayout(_device, _shadowLayout, nullptr);
+
 	destroyPipelines();
 
 	for (RenderPass* p : _renderPasses)
@@ -327,6 +526,8 @@ void Renderer::_cleanup()
 		delete p;
 	}
 	_renderPasses.clear();
+
+	_destroyBackbufferRenderTargets();
 
 	delete _swapChain;
 	_swapChain = nullptr;
@@ -437,6 +638,34 @@ void Renderer::_createUniforms()
 	createUniform("model", getAlignedRange(sizeof(ModelUniform)) * MAX_MODELS);
 	createUniform("light", sizeof(Light));
 	createUniform("material", getAlignedRange(sizeof(MaterialData)) * MAX_MODELS);
+}
+
+void Renderer::_destroyBackbufferRenderTargets()
+{
+	for (Framebuffer& fb : _backbufferRenderTargets)
+	{
+		if (fb.framebuffer)
+			vkDestroyFramebuffer(Renderer::device(), fb.framebuffer, nullptr);
+
+		if (fb.view)
+			vkDestroyImageView(Renderer::device(), fb.view, nullptr);
+
+		if (fb.image)
+			vkDestroyImage(Renderer::device(), fb.image, nullptr);
+
+		if (fb.memory)
+			vkFreeMemory(Renderer::device(), fb.memory, nullptr);
+
+		if (fb.depthView)
+			vkDestroyImageView(Renderer::device(), fb.depthView, nullptr);
+
+		if (fb.depthImage)
+			vkDestroyImage(Renderer::device(), fb.depthImage, nullptr);
+
+		if(fb.depthMemory)
+			vkFreeMemory(Renderer::device(), fb.depthMemory, nullptr);
+	}
+	_backbufferRenderTargets.clear();
 }
 
 void Renderer::_initDevice()

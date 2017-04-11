@@ -136,6 +136,7 @@
     <ClCompile Include="src\Model.cpp" />
     <ClCompile Include="src\renderpass\RenderPass.cpp" />
     <ClCompile Include="src\renderpass\SceneRenderPass.cpp" />
+    <ClCompile Include="src\renderpass\PostProcessRenderPass.cpp" />
     <ClCompile Include="src\renderpass\ShadowMapRenderPass.cpp" />
     <ClCompile Include="src\Scene.cpp" />
     <ClCompile Include="src\ShaderCache.cpp" />
@@ -153,9 +154,10 @@
     <ClInclude Include="src\Core.h" />
     <ClInclude Include="src\Light.h" />
     <ClInclude Include="src\Model.h" />
+    <ClInclude Include="src\Framebuffer.h" />
     <ClInclude Include="src\renderpass\RenderPass.h" />
     <ClInclude Include="src\renderpass\SceneRenderPass.h" />
-    <ClInclude Include="src\renderpass\ScreenRenderPass.h" />
+    <ClInclude Include="src\renderpass\PostProcessRenderPass.h" />
     <ClInclude Include="src\renderpass\ShadowMapRenderPass.h" />
     <ClInclude Include="src\Scene.h" />
     <ClInclude Include="src\SetBinding.h" />
