@@ -82,23 +82,27 @@ void PostProcessRenderPass::_createDescriptorSets(Renderer* renderer)
 	if (!fbs.size() || !swapChainFBs.size()) return; //not ready yet.
 
 	VkDescriptorPoolSize sizes[1] = {};
+
+	uint32_t bindings = 2; //depth + color;
+	uint32_t count = (uint32_t)fbs.size() * bindings;
 	
 	//Sampler
-	sizes[0].descriptorCount = (uint32_t)fbs.size();
+	sizes[0].descriptorCount = count;
 	sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
 	VkDescriptorPoolCreateInfo pool = {};
 	pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	pool.poolSizeCount = 1;
 	pool.pPoolSizes = sizes;
-	pool.maxSets = (uint32_t)fbs.size();
+	pool.maxSets = count;
 
 	VkCheck(vkCreateDescriptorPool(Renderer::device(), &pool, nullptr, &_descriptorPool));
 
 	std::vector<VkDescriptorSetLayout> layouts;
 	for (auto& fb : fbs)
 	{
-		layouts.push_back(_descriptorLayouts[0]);
+		for(uint32_t i = 0; i < bindings; ++i)
+			layouts.push_back(_descriptorLayouts[0]);
 	}
 
 	VkDescriptorSetAllocateInfo alloc = {};
@@ -145,7 +149,7 @@ void PostProcessRenderPass::_createDescriptorSets(Renderer* renderer)
 		img.sampler = _sampler;
 		img.imageView = fbs[i].view;
 
-		VkWriteDescriptorSet writes[1] = {};
+		VkWriteDescriptorSet writes[2] = {};
 		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		writes[0].descriptorCount = 1;
 		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -154,8 +158,20 @@ void PostProcessRenderPass::_createDescriptorSets(Renderer* renderer)
 		writes[0].dstArrayElement = 0;
 		writes[0].pImageInfo = &img;
 
-		vkUpdateDescriptorSets(Renderer::device(), 1, writes, 0, nullptr);
 
+		VkDescriptorImageInfo depth = img;
+		depth.imageView = fbs[i].depthView;
+		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[1].descriptorCount = 1;
+		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writes[1].dstSet = _descriptorSets[i];
+		writes[1].dstBinding = 1;
+		writes[1].dstArrayElement = 0;
+		writes[1].pImageInfo = &depth;
+
+		vkUpdateDescriptorSets(Renderer::device(), 2, writes, 0, nullptr);
+
+		_imageViewSets[fbs[i].view] = _descriptorSets[i];
 		_imageViewSets[swapChainFBs[i].view] = _descriptorSets[i];
 	}
 }
@@ -266,13 +282,18 @@ void PostProcessRenderPass::_createPipelineLayout()
 
 	VkDescriptorSetLayoutCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	info.bindingCount = 1;
+	info.bindingCount = 2;
 
-	VkDescriptorSetLayoutBinding bindings[1] = {};
+	VkDescriptorSetLayoutBinding bindings[2] = {};
 	bindings[0].binding = 0;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	bindings[0].descriptorCount = 1;
+
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindings[1].descriptorCount = 1;
 
 	info.pBindings = bindings;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[0]));
