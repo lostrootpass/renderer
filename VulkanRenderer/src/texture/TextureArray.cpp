@@ -27,7 +27,6 @@ void TextureArray::_createImage(Renderer* renderer, VkImageCreateInfo& info)
 
 		//TODO: more graceful error handling.
 		int res = stbi_info(p.c_str(), (int*)&width, (int*)&height, &channels);
-		assert(res);
 
 		//TODO: fix.
 		//Force an alpha channel to be allocated even if we don't need one.
@@ -51,15 +50,24 @@ void TextureArray::_createImage(Renderer* renderer, VkImageCreateInfo& info)
 
 	renderer->createAndBindBuffer(buff, _staging, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-	stbi_uc* tex;
+	stbi_uc* tex = nullptr;
 	for (size_t i = 0; i < _paths.size(); ++i)
 	{
 		if (_paths[i] != "")
 		{
 			tex = stbi_load(_paths[i].c_str(), (int*)&width, (int*)&height, &channels, STBI_rgb_alpha);
-			VkDeviceSize copySize = width * height * 4;
-			_staging.copyData((void*)tex, copySize, stride * i);
-			stbi_image_free(tex);
+
+			if (tex)
+			{
+				VkDeviceSize copySize = width * height * 4;
+				_staging.copyData((void*)tex, copySize, stride * i);
+				stbi_image_free(tex);
+			}
+			else
+			{
+				width = _width;
+				height = _height;
+			}
 		}
 		else
 		{

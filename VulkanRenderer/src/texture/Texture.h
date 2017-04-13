@@ -21,7 +21,7 @@ public:
 
 	void bind(Renderer* renderer, VkDescriptorSet set = VK_NULL_HANDLE, uint32_t binding = 0, uint32_t index = 0);
 
-	void load(Renderer* renderer);
+	bool load(Renderer* renderer);
 
 	void unbind(Renderer* renderer, VkDescriptorSet set = VK_NULL_HANDLE, uint32_t binding = 0, uint32_t index = 0);
 

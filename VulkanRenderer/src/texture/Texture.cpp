@@ -40,10 +40,14 @@ void Texture::bind(Renderer* renderer, VkDescriptorSet set, uint32_t binding, ui
 		_updateSet(renderer, set, binding, index);
 }
 
-void Texture::load(Renderer* renderer)
+bool Texture::load(Renderer* renderer)
 {
 	VkImageCreateInfo info = {};
 	_createImage(renderer, info);
+
+	assert(_image);
+	if (!_image)
+		return false;
 
 	_allocBindImageMemory(renderer);
 
@@ -88,6 +92,8 @@ void Texture::load(Renderer* renderer)
 	view.subresourceRange = range;
 
 	VkCheck(vkCreateImageView(Renderer::device(), &view, nullptr, &_view));
+
+	return true;
 }
 
 void Texture::unbind(Renderer* renderer, VkDescriptorSet set, uint32_t binding, uint32_t index)

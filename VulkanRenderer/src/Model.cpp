@@ -367,8 +367,8 @@ void Model::_loadModel(Renderer* renderer)
 			_materials[i] = new TextureArray(paths, renderer);
 			if (!_materialSet) _materialSet = &(_materials[i]->set());
 			if (!master) master = _materials[i];
-			_materials[i]->load(renderer);
-			_materials[i]->bind(renderer, *_materialSet, 0, (uint32_t)i);
+			if(_materials[i]->load(renderer))
+				_materials[i]->bind(renderer, *_materialSet, 0, (uint32_t)i);
 		}
 		else
 			_materials[i] = nullptr;
@@ -382,8 +382,8 @@ void Model::_loadModel(Renderer* renderer)
 		std::vector<std::string> missing = { "assets/textures/missingtexture.png" };
 		master = new TextureArray(missing, renderer);
 		_materialSet = &(master->set());
-		master->load(renderer);
-		master->bind(renderer, *_materialSet, 0, 0);
+		if(master->load(renderer))
+			master->bind(renderer, *_materialSet, 0, 0);
 	}
 
 	for (size_t i = 0; i < 64; i++)
