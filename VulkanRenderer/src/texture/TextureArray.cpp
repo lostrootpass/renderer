@@ -26,7 +26,8 @@ void TextureArray::_createImage(Renderer* renderer, VkImageCreateInfo& info)
 			continue;
 
 		//TODO: more graceful error handling.
-		assert(stbi_info(p.c_str(), (int*)&width, (int*)&height, &channels));
+		int res = stbi_info(p.c_str(), (int*)&width, (int*)&height, &channels);
+		assert(res);
 
 		//TODO: fix.
 		//Force an alpha channel to be allocated even if we don't need one.
