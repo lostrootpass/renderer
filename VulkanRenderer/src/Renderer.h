@@ -153,6 +153,8 @@ private:
 		uint32_t index;
 	};
 
+	typedef std::pair<const std::string, Uniform*> UniformPair;
+
 	std::vector<VkCommandBuffer> _commandBuffers;
 	std::vector<RenderPass*> _renderPasses;
 	std::vector<Framebuffer> _backbufferRenderTargets;
@@ -167,6 +169,7 @@ private:
 	VkCommandPool _commandPool;
 	VkExtent2D _extent;
 	VkPhysicalDeviceProperties _physicalProperties;
+	VkPhysicalDeviceFeatures _physicalFeatures;
 
 	//Shared texture descriptors.
 	VkDescriptorPool _textureDescriptorPool;

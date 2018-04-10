@@ -65,8 +65,15 @@ void Core::_init()
 	RenderPass* shadow = new ShadowMapRenderPass(*_scene);
 	_renderer->addRenderPass(shadow);
 	_renderer->addRenderPass(new SceneRenderPass(*_scene, *shadow));
-	_renderer->addRenderPass(new PostProcessRenderPass(*_scene));
 
+
+	//Example postprocess chain setup:
+	/*
+	PostProcessRenderPass* pp = new PostProcessRenderPass(*_scene);
+	pp->addEffect("depthonly");
+	pp->addEffect("vignette");
+	_renderer->addRenderPass(pp);
+	*/
 
 	_renderer->recreateSwapChain();
 }

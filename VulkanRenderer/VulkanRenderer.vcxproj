@@ -69,8 +69,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\VulkanSDK\1.0.37.0\Include;$(VisualStudioDir)\Libraries\glm-0.9.8.3;$(VisualStudioDir)\Libraries\SDL2-2.0.5\include;$(VisualStudioDir)\Libraries\tinyobjloader;$(VisualStudioDir)\Libraries\stb;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\VulkanSDK\1.0.37.0\Bin;$(VisualStudioDir)\Libraries\SDL2-2.0.5\libdebug\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(VULKAN_SDK)\Include;$(VisualStudioDir)\Libraries\glm-0.9.8.3;$(VisualStudioDir)\Libraries\SDL2-2.0.5\include;$(VisualStudioDir)\Libraries\tinyobjloader;$(VisualStudioDir)\Libraries\stb;$(IncludePath)</IncludePath>
+    <LibraryPath>$(VULKAN_SDK)\Lib;$(VisualStudioDir)\Libraries\SDL2-2.0.5\libdebug\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>C:\VulkanSDK\1.0.37.0\Include;$(VisualStudioDir)\Libraries\glm-0.9.8.3;$(VisualStudioDir)\Libraries\SDL2-2.0.5\include;$(VisualStudioDir)\Libraries\tinyobjloader;$(VisualStudioDir)\Libraries\stb;$(IncludePath)</IncludePath>
@@ -93,7 +93,7 @@
     </ClCompile>
     <Link>
       <AdditionalDependencies>SDL2.lib;SDL2main.lib;SDL2test.lib;vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>NotSet</SubSystem>
       <IgnoreSpecificDefaultLibraries>library</IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>

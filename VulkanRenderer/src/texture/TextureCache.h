@@ -29,7 +29,7 @@ struct TextureCache final
 
 	static void shutdown()
 	{
-		for (auto pair : _textureCache)
+		for (TextureCachePair& pair : _textureCache)
 		{
 			delete pair.second;
 		}
@@ -38,6 +38,7 @@ struct TextureCache final
 	}
 
 private:
+	typedef std::pair<const std::string, Texture*> TextureCachePair;
 	static std::unordered_map<std::string, Texture*> _textureCache;
 
 	static void _loadTexture(const std::string& name, Renderer& renderer)

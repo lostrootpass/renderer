@@ -31,7 +31,7 @@ void RenderPass::bindDescriptorSetById(VkCommandBuffer cmd, SetBinding set, std:
 
 void RenderPass::destroyPipelines()
 {
-	for (auto& pair : _pipelines)
+	for (std::pair<const std::string, VkPipeline>& pair : _pipelines)
 		vkDestroyPipeline(Renderer::device(), pair.second, nullptr);
 
 	_pipelines.clear();

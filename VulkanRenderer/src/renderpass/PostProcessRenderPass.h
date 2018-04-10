@@ -15,6 +15,8 @@ public:
 
 	~PostProcessRenderPass();
 
+	void addEffect(const std::string& shaderName);
+
 	virtual void init(Renderer* renderer) override;
 
 	virtual void render(VkCommandBuffer cmd, const Framebuffer* framebuffer = nullptr) override;
@@ -45,6 +47,13 @@ private:
 	VkSampler _sampler;
 
 	std::unordered_map<VkImageView, VkDescriptorSet> _imageViewSets;
+	std::unordered_map<VkFramebuffer, Framebuffer> _postprocessRenderTargets;
+	std::unordered_map<VkFramebuffer, const Framebuffer*> _postprocessBackbuffers;
+	std::vector<std::string> _passes;
+
+	void _allocatePostprocessRenderTargets(Renderer* renderer);
+
+	void _destroyPostprocessRenderTargets();
 };
 
 #endif //SCREEN_RENDER_PASS_H_

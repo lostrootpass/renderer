@@ -31,7 +31,7 @@ struct ShaderCache final
 
 	static void clear()
 	{
-		for (auto pair : _moduleCache)
+		for (CachePair& pair : _moduleCache)
 		{
 			vkDestroyShaderModule(Renderer::device(), pair.second, nullptr);
 		}
@@ -40,6 +40,7 @@ struct ShaderCache final
 	}
 
 private:
+	typedef std::pair<const std::string, VkShaderModule> CachePair;
 	static std::unordered_map<std::string, VkShaderModule> _moduleCache;
 
 	static void _loadModule(const std::string& name)

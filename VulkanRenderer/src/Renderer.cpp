@@ -302,7 +302,9 @@ void Renderer::setImageLayout(VkImage image, VkFormat format, VkImageLayout oldL
 		break;
 	}
 
-	vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);	
+	vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, 
+		nullptr, 0, nullptr, 1, &barrier);	
 
 	submitOneShotCmdBuffer(buffer);
 }
@@ -358,6 +360,8 @@ void Renderer::_allocateBackbufferRenderTargets()
 
 	_destroyBackbufferRenderTargets();
 
+	const VkExtent2D extent = swapChain()->surfaceCapabilities().currentExtent;
+
 	for (size_t i = 0; i < swapChainBuffers.size(); ++i)
 	{
 		Framebuffer fb = {};
@@ -369,7 +373,7 @@ void Renderer::_allocateBackbufferRenderTargets()
 			VkImageCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 			info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 			info.tiling = VK_IMAGE_TILING_OPTIMAL;
-			info.extent = { swapChain()->surfaceCapabilities().currentExtent.width, swapChain()->surfaceCapabilities().currentExtent.height, 1 };
+			info.extent = { extent.width, extent.height, 1 };
 			info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			info.samples = VK_SAMPLE_COUNT_1_BIT;
 			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -420,7 +424,7 @@ void Renderer::_allocateBackbufferRenderTargets()
 			VkImageCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 			info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 			info.tiling = VK_IMAGE_TILING_OPTIMAL;
-			info.extent = { swapChain()->surfaceCapabilities().currentExtent.width, swapChain()->surfaceCapabilities().currentExtent.height, 1 };
+			info.extent = { extent.width, extent.height, 1 };
 			info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			info.samples = VK_SAMPLE_COUNT_1_BIT;
 			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -467,8 +471,8 @@ void Renderer::_allocateBackbufferRenderTargets()
 
 			VkFramebufferCreateInfo info = {};
 			info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			info.width = swapChain()->surfaceCapabilities().currentExtent.width;
-			info.height = swapChain()->surfaceCapabilities().currentExtent.height;
+			info.width = extent.width;
+			info.height = extent.height;
 			info.renderPass = renderPass();
 			info.attachmentCount = 2;
 			info.pAttachments = attachments;
@@ -504,7 +508,7 @@ void Renderer::_cleanup()
 {
 	VkCheck(vkDeviceWaitIdle(_device));
 
-	for (auto pair : _uniforms)
+	for (UniformPair& pair : _uniforms)
 	{
 		delete pair.second;
 	}
@@ -672,8 +676,6 @@ void Renderer::_initDevice()
 {
 	_physicalDevice = _pickPhysicalDevice();
 
-	VkPhysicalDeviceFeatures features = {};
-
 	VkDeviceQueueCreateInfo queueCreateInfo = {};
 	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 
@@ -683,7 +685,7 @@ void Renderer::_initDevice()
 
 	VkDeviceCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	info.pEnabledFeatures = &features;
+	info.pEnabledFeatures = &_physicalFeatures;
 	info.ppEnabledExtensionNames = extensions.data();
 	info.enabledExtensionCount = (uint32_t)extensions.size();
 
@@ -742,6 +744,8 @@ VkPhysicalDevice Renderer::_pickPhysicalDevice()
 			{
 				physicalDevice = physicalDevices[i];
 				_physicalProperties = properties;
+
+				vkGetPhysicalDeviceFeatures(physicalDevice, &_physicalFeatures);
 				break;
 			}
 		}

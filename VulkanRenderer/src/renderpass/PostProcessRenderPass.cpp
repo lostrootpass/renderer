@@ -9,12 +9,12 @@ const uint32_t MAX_MATERIALS = 64;
 
 PostProcessRenderPass::PostProcessRenderPass(Scene& scene) : _scene(&scene)
 {
-
 }
 
 PostProcessRenderPass::~PostProcessRenderPass()
 {
 	vkDestroySampler(Renderer::device(), _sampler, nullptr);
+	_destroyPostprocessRenderTargets();
 }
 
 void PostProcessRenderPass::init(Renderer* renderer)
@@ -28,19 +28,21 @@ void PostProcessRenderPass::init(Renderer* renderer)
 
 void PostProcessRenderPass::render(VkCommandBuffer cmd, const Framebuffer* framebuffer)
 {
-	//Disable for now.
-	//return;
+	if (_passes.empty())
+		return;
 
 	if (_imageViewSets.find(framebuffer->view) == _imageViewSets.end())
 	{
 		_createDescriptorSets(_renderer);
-		//return;
+		_allocatePostprocessRenderTargets(_renderer);
 	}
 
 	VkClearValue clearValues[] = {
 		{ 0.0f, 0.0f, 0.2f, 1.0f }, //Clear color
-		{ 1.0f, 0.0f } //Depth stencil
+		{ 1.0f, 0 } //Depth stencil
 	};
+
+	VkFramebuffer fb = framebuffer->framebuffer;
 
 	VkExtent2D _extent = _scene->viewport();
 
@@ -51,24 +53,55 @@ void PostProcessRenderPass::render(VkCommandBuffer cmd, const Framebuffer* frame
 	info.renderArea.extent = _extent;
 	info.clearValueCount = 2;
 	info.pClearValues = clearValues;
-	info.framebuffer = framebuffer->framebuffer;
+	info.framebuffer = fb;
 
-	VkViewport viewport = { 0, 0, (float)_extent.width, (float)_extent.height, 0.0f, 1.0f };
+	VkViewport viewport = {
+		0, 0, (float)_extent.width, (float)_extent.height, 0.0f, 1.0f
+	};
 	VkRect2D scissor = { 0, 0, _extent.width, _extent.height };
 
 	vkCmdSetViewport(cmd, 0, 1, &viewport);
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	vkCmdBeginRenderPass(cmd, &info, VK_SUBPASS_CONTENTS_INLINE);
+	VkImageView previousView = framebuffer->view;
 
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_imageViewSets[framebuffer->view], 0, nullptr);
+	VkImageCopy region = {};
+	region.extent = { _extent.width, _extent.height, 1 };
+	region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.srcSubresource.layerCount = 1;
+	region.dstSubresource = region.srcSubresource;
 
-	//TODO: retrieve current screen shader (if any) from global config.
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, getPipelineForShader("shaders/screen/vignette"));
+	for (size_t i = 0; i < _passes.size(); ++i)
+	{
+		const std::string& pass = _passes[i];
 
-	vkCmdDraw(cmd, 4, 1, 0, 0);
+		const bool hasAssociation = 
+			(_postprocessBackbuffers.find(fb) != _postprocessBackbuffers.end());
 
-	vkCmdEndRenderPass(cmd);
+		vkCmdBeginRenderPass(cmd, &info, VK_SUBPASS_CONTENTS_INLINE);
+
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+			_pipelineLayout, 0, 1, &_imageViewSets[previousView], 0, nullptr);
+
+		//TODO: retrieve current screen shader (if any) from global config.
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+			getPipelineForShader("shaders/screen/" + pass));
+
+		vkCmdDraw(cmd, 4, 1, 0, 0);
+
+		vkCmdEndRenderPass(cmd);
+
+		//Don't bother copying if we won't need it after this pass.
+		if (hasAssociation && i != (_passes.size() - 1))
+		{
+			vkCmdCopyImage(cmd, framebuffer->image, 
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+				_postprocessBackbuffers[fb]->image,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+			previousView = _postprocessBackbuffers[fb]->view;
+		}
+	}
 }
 
 void PostProcessRenderPass::_createDescriptorSets(Renderer* renderer)
@@ -94,12 +127,12 @@ void PostProcessRenderPass::_createDescriptorSets(Renderer* renderer)
 	pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	pool.poolSizeCount = 1;
 	pool.pPoolSizes = sizes;
-	pool.maxSets = count;
+	pool.maxSets = count * (uint32_t)_passes.size();
 
 	VkCheck(vkCreateDescriptorPool(Renderer::device(), &pool, nullptr, &_descriptorPool));
 
 	std::vector<VkDescriptorSetLayout> layouts;
-	for (auto& fb : fbs)
+	for (const Framebuffer& fb : fbs)
 	{
 		for(uint32_t i = 0; i < bindings; ++i)
 			layouts.push_back(_descriptorLayouts[0]);
@@ -193,7 +226,8 @@ void PostProcessRenderPass::_createPipeline(const std::string& shaderName)
 
 	VkPipelineColorBlendAttachmentState cba = {};
 	cba.blendEnable = VK_TRUE;
-	cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
 	cba.colorBlendOp = VK_BLEND_OP_ADD;
 	cba.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
@@ -246,7 +280,9 @@ void PostProcessRenderPass::_createPipeline(const std::string& shaderName)
 	dss.depthTestEnable = VK_FALSE;
 	dss.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 
-	VkDynamicState dynStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+	VkDynamicState dynStates[] = { 
+		VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR
+	};
 	VkPipelineDynamicStateCreateInfo dys = {};
 	dys.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 	dys.dynamicStateCount = 2;
@@ -268,7 +304,8 @@ void PostProcessRenderPass::_createPipeline(const std::string& shaderName)
 	info.pDepthStencilState = &dss;
 	info.pDynamicState = &dys;
 
-	VkCheck(vkCreateGraphicsPipelines(Renderer::device(), VK_NULL_HANDLE, 1, &info, nullptr, &pipeline));
+	VkCheck(vkCreateGraphicsPipelines(Renderer::device(), VK_NULL_HANDLE,
+		1, &info, nullptr, &pipeline));
 
 	_pipelines[shaderName] = pipeline;
 }
@@ -296,14 +333,16 @@ void PostProcessRenderPass::_createPipelineLayout()
 	bindings[1].descriptorCount = 1;
 
 	info.pBindings = bindings;
-	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[0]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, 
+		nullptr, &_descriptorLayouts[0]));
 
 	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	layoutCreateInfo.pSetLayouts = _descriptorLayouts.data();
 	layoutCreateInfo.setLayoutCount = (uint32_t)_descriptorLayouts.size();
 
-	VkCheck(vkCreatePipelineLayout(Renderer::device(), &layoutCreateInfo, nullptr, &_pipelineLayout));
+	VkCheck(vkCreatePipelineLayout(Renderer::device(), &layoutCreateInfo, 
+		nullptr, &_pipelineLayout));
 }
 
 void PostProcessRenderPass::_createRenderPass()
@@ -315,8 +354,8 @@ void PostProcessRenderPass::_createRenderPass()
 	attachDesc.format = VK_FORMAT_B8G8R8A8_UNORM;
 	attachDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-	attachDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	attachDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
 	VkAttachmentReference attachRef = {};
@@ -353,7 +392,8 @@ void PostProcessRenderPass::_createRenderPass()
 	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependency.dstSubpass = 0;
 
@@ -368,4 +408,172 @@ void PostProcessRenderPass::_createRenderPass()
 	info.pDependencies = &dependency;
 
 	VkCheck(vkCreateRenderPass(Renderer::device(), &info, nullptr, &_renderPass));
+}
+
+void PostProcessRenderPass::_allocatePostprocessRenderTargets(Renderer* renderer)
+{
+	const std::vector<Framebuffer>& swapChainBuffers = renderer->swapChain()->framebuffers();
+
+	_destroyPostprocessRenderTargets();
+
+	VkExtent2D extent = renderer->extent();
+
+	for (size_t i = 0; i < swapChainBuffers.size(); ++i)
+	{
+		Framebuffer fb = {};
+
+		//Image
+		{
+			//fb.image = swapChainBuffers[i].image;
+
+			VkImageCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+			info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+			info.tiling = VK_IMAGE_TILING_OPTIMAL;
+			info.extent = { extent.width, extent.height, 1 };
+			info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			info.samples = VK_SAMPLE_COUNT_1_BIT;
+			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			info.mipLevels = 1;
+			info.arrayLayers = 1;
+			info.format = VK_FORMAT_B8G8R8A8_UNORM;
+			info.imageType = VK_IMAGE_TYPE_2D;
+
+			VkCheck(vkCreateImage(Renderer::device(), &info, nullptr, &fb.image));
+
+			VkMemoryRequirements memReq;
+			vkGetImageMemoryRequirements(Renderer::device(), fb.image, &memReq);
+
+			VkMemoryAllocateInfo alloc = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+			alloc.allocationSize = memReq.size;
+			alloc.memoryTypeIndex = renderer->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+			VkCheck(vkAllocateMemory(Renderer::device(), &alloc, nullptr, &fb.memory));
+			VkCheck(vkBindImageMemory(Renderer::device(), fb.image, fb.memory, 0));
+		}
+
+		//View
+		{
+			//fb.view = swapChainBuffers[i].view;
+
+			VkImageViewCreateInfo info = {};
+			info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			info.image = fb.image;
+			info.format = VK_FORMAT_B8G8R8A8_UNORM;
+			info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+
+			info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+			info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			info.subresourceRange.baseMipLevel = 0;
+			info.subresourceRange.levelCount = 1;
+			info.subresourceRange.baseArrayLayer = 0;
+			info.subresourceRange.layerCount = 1;
+
+			VkCheck(vkCreateImageView(Renderer::device(), &info, nullptr, &(fb.view)));
+		}
+
+		//Depth image
+		{
+			VkImageCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+			info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+			info.tiling = VK_IMAGE_TILING_OPTIMAL;
+			info.extent = { extent.width, extent.height, 1 };
+			info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			info.samples = VK_SAMPLE_COUNT_1_BIT;
+			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			info.mipLevels = 1;
+			info.arrayLayers = 1;
+			info.format = VK_FORMAT_D32_SFLOAT;
+			info.imageType = VK_IMAGE_TYPE_2D;
+
+			VkCheck(vkCreateImage(Renderer::device(), &info, nullptr, &fb.depthImage));
+
+			VkMemoryRequirements memReq;
+			vkGetImageMemoryRequirements(Renderer::device(), fb.depthImage, &memReq);
+
+			VkMemoryAllocateInfo alloc = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+			alloc.allocationSize = memReq.size;
+			alloc.memoryTypeIndex = renderer->getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+			VkCheck(vkAllocateMemory(Renderer::device(), &alloc, nullptr, &fb.depthMemory));
+			VkCheck(vkBindImageMemory(Renderer::device(), fb.depthImage, fb.depthMemory, 0));
+		}
+
+		//Depth view
+		{
+			VkImageViewCreateInfo view = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+			view.format = VK_FORMAT_D32_SFLOAT;
+			view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			view.image = fb.depthImage;
+			view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+			view.subresourceRange.baseMipLevel = 0;
+			view.subresourceRange.baseArrayLayer = 0;
+			view.subresourceRange.layerCount = 1;
+			view.subresourceRange.levelCount = 1;
+
+			VkCheck(vkCreateImageView(Renderer::device(), &view, nullptr, &fb.depthView));
+		}
+
+		//FB
+		{
+			//fb.framebuffer = swapChainBuffers[i].framebuffer;
+
+			const VkImageView attachments[] = {
+				fb.view, fb.depthView
+			};
+
+			VkFramebufferCreateInfo info = {};
+			info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			info.width = extent.width;
+			info.height = extent.height;
+			info.renderPass = renderPass();
+			info.attachmentCount = 2;
+			info.pAttachments = attachments;
+			info.layers = 1;
+
+			VkCheck(vkCreateFramebuffer(Renderer::device(), &info, nullptr, &(fb.framebuffer)));
+		}
+
+		_postprocessRenderTargets[swapChainBuffers[i].framebuffer] = fb;
+		_postprocessBackbuffers[swapChainBuffers[i].framebuffer] = &renderer->backbufferRenderTargets()[i];
+	}
+}
+
+void PostProcessRenderPass::_destroyPostprocessRenderTargets()
+{
+	for (std::pair<const VkFramebuffer, Framebuffer>& pair : _postprocessRenderTargets)
+	{
+		Framebuffer& fb = pair.second;
+
+		if (fb.framebuffer)
+			vkDestroyFramebuffer(Renderer::device(), fb.framebuffer, nullptr);
+
+		if (fb.view)
+			vkDestroyImageView(Renderer::device(), fb.view, nullptr);
+
+		if (fb.image)
+			vkDestroyImage(Renderer::device(), fb.image, nullptr);
+
+		if (fb.memory)
+			vkFreeMemory(Renderer::device(), fb.memory, nullptr);
+
+		if (fb.depthView)
+			vkDestroyImageView(Renderer::device(), fb.depthView, nullptr);
+
+		if (fb.depthImage)
+			vkDestroyImage(Renderer::device(), fb.depthImage, nullptr);
+
+		if (fb.depthMemory)
+			vkFreeMemory(Renderer::device(), fb.depthMemory, nullptr);
+	}
+
+	_postprocessRenderTargets.clear();
+}
+
+void PostProcessRenderPass::addEffect(const std::string& shaderName)
+{
+	_passes.push_back(shaderName);
 }
