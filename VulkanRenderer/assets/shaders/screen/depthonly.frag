@@ -9,5 +9,6 @@ layout(binding = 1) uniform sampler2D depthAttachment;
 
 void main()
 {
-    fragColor = texture(depthAttachment, vec2(uv.x, uv.y));
+    fragColor = vec4(texture(depthAttachment, vec2(uv.x, uv.y)).r);
+    fragColor.a = 1.0;
 }
