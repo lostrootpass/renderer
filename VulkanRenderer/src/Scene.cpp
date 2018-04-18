@@ -38,7 +38,8 @@ void Scene::addModel(const std::string& name, float scale)
 	Model* model = new Model(name, _renderer);
 	model->setScale(scale);
 	_models.push_back(model);
-	
+
+
 	//We've changed the scene and need to update the command buffers to reflect that.
 	_renderer->recordCommandBuffers(this);
 }
@@ -53,6 +54,19 @@ void Scene::draw(VkCommandBuffer cmd, RenderPass& pass) const
 	for (Model* model : _models)
 	{
 		model->draw(_renderer, cmd, pass);
+	}
+}
+
+void Scene::drawGeom(VkCommandBuffer cmd, RenderPass& pass) const
+{
+	pass.updatePushConstants(cmd, sizeof(uint32_t), (void*)&_sceneFlags);
+
+	pass.bindDescriptorSetById(cmd, SET_BINDING_LIGHTS, nullptr);
+	pass.bindDescriptorSetById(cmd, SET_BINDING_CAMERA, nullptr);
+
+	for (Model* model : _models)
+	{
+		model->drawGeom(_renderer, cmd, pass);
 	}
 }
 
@@ -121,7 +135,13 @@ void Scene::resize(uint32_t width, uint32_t height)
 void Scene::update(float dtime)
 {
 	_camera->update(dtime);
-	CameraUniform camera = { _camera->projectionViewMatrix(), _camera->eye() };
+	CameraUniform camera = {
+		_camera->projectionViewMatrix(),
+		_camera->inverseProjection(),
+		_camera->eye(),
+		_camera->width(),
+		_camera->height()
+	};
 	_renderer->updateUniform("camera", (void*)&camera, sizeof(camera));
 	//_setLightPos(_lights[0].pos + (glm::vec3(-1.0f * dtime, 0.0f, 0.0f)));
 
@@ -135,7 +155,13 @@ void Scene::_init()
 {
 	VkExtent2D extent = _renderer->extent();
 	_camera = new Camera(extent.width, extent.height);
-	CameraUniform camera = { _camera->projectionViewMatrix(), _camera->eye() };
+	CameraUniform camera = {
+		_camera->projectionViewMatrix(),
+		_camera->inverseProjection(),
+		_camera->eye(),
+		_camera->width(),
+		_camera->height()
+	};
 	_renderer->updateUniform("camera", (void*)&camera, sizeof(camera));
 
 	Light light;

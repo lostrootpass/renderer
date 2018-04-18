@@ -15,7 +15,10 @@ const float DEFAULT_CLIP_FAR = 100.0f;
 struct CameraUniform
 {
 	glm::mat4 projView;
+	glm::mat4 invProj;
 	glm::vec4 pos;
+	uint32_t viewportWidth;
+	uint32_t viewportHeight;
 };
 
 class Camera
@@ -39,10 +42,13 @@ public:
 
 	glm::mat4 projectionViewMatrix() const
 	{
-		glm::mat4 projectionMatrix = glm::perspective(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
-		projectionMatrix[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
 
-		return projectionMatrix * viewMatrix();
+		return _projection() * viewMatrix();
+	}
+
+	inline glm::mat4 inverseProjection() const
+	{
+		return glm::inverse(_projection());
 	}
 
 	void update(float dtime);
@@ -100,6 +106,14 @@ private:
 		_rotation = glm::rotate(_rotation, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
 		_orientation = glm::mat4_cast(glm::normalize(_rotation));
+	}
+
+	glm::mat4 _projection() const
+	{
+		glm::mat4 projectionMatrix = glm::perspective(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
+		projectionMatrix[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
+
+		return projectionMatrix;
 	}
 };
 

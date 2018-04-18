@@ -56,6 +56,36 @@ void Model::draw(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass)
 	}
 }
 
+void Model::drawGeom(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass)
+{
+	pass.bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);
+	
+	std::vector<uint32_t> descOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(ModelUniform))*_index};
+	pass.bindDescriptorSetById(cmd, SET_BINDING_MODEL, &descOffsets);
+
+	std::vector<uint32_t> matOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(MaterialData))*_index};
+	pass.bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
+
+	for (TextureArray* m : _materials)
+	{
+		if(m && m->set())
+			pass.bindDescriptorSet(cmd, SET_BINDING_TEXTURE, m->set());
+	}
+
+	if (_pipeline == VK_NULL_HANDLE)
+		_pipeline = pass.getPipelineForShader("shaders/common/deferred_model");
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+
+	for (const Shape& s : _shapes)
+	{
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(cmd, 0, 1, &s.vertexBuffer.buffer, offsets);
+		vkCmdBindIndexBuffer(cmd, s.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(cmd, (uint32_t)s.indices.size(), 1, 0, 0, 0);
+	}
+}
+
 void Model::drawShadow(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass)
 {
 	pass.bindDescriptorSetById(cmd, SET_BINDING_SAMPLER);

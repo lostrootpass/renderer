@@ -49,7 +49,7 @@ struct VulkanUtil
 		const char* msg,
 		void* userData)
 	{
-		printf("Validation layer: %s\r\n", msg);
+		printf("Validation layer: %s\r\n--\r\n", msg);
 
 		return VK_FALSE;
 	}

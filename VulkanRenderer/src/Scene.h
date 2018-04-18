@@ -20,10 +20,17 @@ public:
 	void addModel(const std::string& name, float scale = 1.0f);
 
 	void draw(VkCommandBuffer cmd, RenderPass& pass) const;
+	
+	void drawGeom(VkCommandBuffer cmd, RenderPass& pass) const;
 
 	void drawShadow(VkCommandBuffer cmd, RenderPass& pass) const;
 
 	void keyDown(SDL_Keycode key);
+
+	inline const std::vector<Model*>& models() const
+	{
+		return _models;
+	}
 
 	void mouseMove(int dx, int dy);
 

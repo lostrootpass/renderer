@@ -69,6 +69,8 @@ public:
 
 	void draw(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass);
 
+	void drawGeom(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass);
+
 	void drawShadow(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass);
 
 	void reload(Renderer* renderer);
@@ -78,6 +80,14 @@ public:
 	inline const std::string& name() const
 	{
 		return _name;
+	}
+
+	inline VkDescriptorSet set() const
+	{
+		if (_materialSet)
+			return *_materialSet;
+		else
+			return VK_NULL_HANDLE;
 	}
 
 	inline void setPosition(glm::vec3 pos)
@@ -101,6 +111,7 @@ private:
 
 	VkPipeline _pipeline;
 	VkPipeline _shadowPipeline;
+	VkPipeline _geomPipeline;
 	const VkDescriptorSet* _materialSet;
 	
 	uint32_t _index;

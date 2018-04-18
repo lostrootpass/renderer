@@ -134,6 +134,7 @@
     <ClCompile Include="src\Core.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Model.cpp" />
+    <ClCompile Include="src\renderpass\DeferredSceneRenderPass.cpp" />
     <ClCompile Include="src\renderpass\RenderPass.cpp" />
     <ClCompile Include="src\renderpass\SceneRenderPass.cpp" />
     <ClCompile Include="src\renderpass\PostProcessRenderPass.cpp" />
@@ -155,6 +156,7 @@
     <ClInclude Include="src\Light.h" />
     <ClInclude Include="src\Model.h" />
     <ClInclude Include="src\Framebuffer.h" />
+    <ClInclude Include="src\renderpass\DeferredSceneRenderPass.h" />
     <ClInclude Include="src\renderpass\RenderPass.h" />
     <ClInclude Include="src\renderpass\SceneRenderPass.h" />
     <ClInclude Include="src\renderpass\PostProcessRenderPass.h" />

@@ -4,6 +4,7 @@
 #include "renderpass/ShadowMapRenderPass.h"
 #include "renderpass/SceneRenderPass.h"
 #include "renderpass/PostProcessRenderPass.h"
+#include "renderpass/DeferredSceneRenderPass.h"
 
 #include <iostream>
 #include <chrono>
@@ -31,6 +32,8 @@ void Core::run(int argc, char** argv)
 		const float scale = (argc > 2 ? strtof(argv[2], 0) : 1.0f);
 		_scene->addModel(argv[1], scale);
 	}
+
+	_renderer->recreateSwapChain();
 
 	std::chrono::time_point<std::chrono::steady_clock> now = Clock::now();
 	std::chrono::duration<float> dtime;
@@ -64,7 +67,10 @@ void Core::_init()
 	//TODO: specify/load renderpasses elsewhere
 	RenderPass* shadow = new ShadowMapRenderPass(*_scene);
 	_renderer->addRenderPass(shadow);
-	_renderer->addRenderPass(new SceneRenderPass(*_scene, *shadow));
+
+	//TODO: allow runtime toggling
+	//_renderer->addRenderPass(new SceneRenderPass(*_scene, *shadow));
+	_renderer->addRenderPass(new DeferredSceneRenderPass(*_scene, *shadow));
 
 
 	//Example postprocess chain setup:
@@ -74,8 +80,6 @@ void Core::_init()
 	pp->addEffect("vignette");
 	_renderer->addRenderPass(pp);
 	*/
-
-	_renderer->recreateSwapChain();
 }
 
 void Core::_pollEvents()
