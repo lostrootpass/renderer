@@ -1,27 +1,7 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-const int MATERIAL_COUNT = 64;
-
-const uint MATFLAG_DIFFUSEMAP = 0x0001;
-const uint MATFLAG_BUMPMAP = 0x0002;
-const uint MATFLAG_SPECMAP = 0x0004;
-const uint MATFLAG_NORMALMAP = 0x0008;
-const uint MATFLAG_PRELIT = 0x0010;
-const uint MATFLAG_ALPHAMASK = 0x0020;
-
-const uint TEXLAYER_DIFFUSE = 0;
-const uint TEXLAYER_BUMP = 1;
-const uint TEXLAYER_SPEC = 2;
-const uint TEXLAYER_ALPHA = 3;
-
-const uint SCENEFLAG_ENABLESHADOWS = 0x0001;
-const uint SCENEFLAG_PRELIT = 0x0002;
-const uint SCENEFLAG_ENABLEBUMPMAPS = 0x0004;
-const uint SCENEFLAG_MAPSPLIT = 0x0008;
-const uint SCENEFLAG_SHOWNORMALS = 0x0010;
-const uint SCENEFLAG_ENABLESPECMAPS = 0x0020;
-const uint SCENEFLAG_ENABLEPCF = 0x0040;
+#include "../shadercommon.inc"
 
 layout(location = 0) in vec2 uv;
 
@@ -31,47 +11,20 @@ layout(set = 0, binding = 0) uniform usampler2D colorAttachment;
 layout(set = 0, binding = 1) uniform sampler2D normalAttachment;
 layout(set = 0, binding = 2) uniform sampler2D depthAttachment;
 layout(set = 1, binding = 0) uniform sampler texsampler;
-layout(set = 2, binding = 0) uniform LightData {
-    mat4 mvp;
-    vec4 color;
-    vec3 pos;
-} lightData;
+layout(set = 2, binding = 0) uniform LightUniform {
+	LightData lightData;
+};
 layout(set = 3, binding = 0) uniform texture2DArray materials[MATERIAL_COUNT];
-layout(set = 4, binding = 0) uniform Camera {
-    mat4 projview;
-	mat4 invProj;
-    vec4 pos;
-	uint width;
-	uint height;
-} camera;
+layout(set = 4, binding = 0) uniform CameraUniform {
+	Camera camera;
+};
 layout(set = 5, binding = 0) uniform texture2D shadowMap;
-layout(std140, set = 6, binding = 0) uniform MaterialData {
-    vec4 ambient[MATERIAL_COUNT];
-    vec4 diffuse[MATERIAL_COUNT];
-    vec4 specular[MATERIAL_COUNT];
-    vec4 emissive[MATERIAL_COUNT];
-    vec4 transparency[MATERIAL_COUNT];
-    uint flags[MATERIAL_COUNT];
-    float shininess[MATERIAL_COUNT];
-} materialData;
+layout(std140, set = 6, binding = 0) uniform MaterialUniform {
+	MaterialData materialData;
+};
 layout(push_constant) uniform SceneFlags {
     uint flags;
 } sceneFlags;
-
-const mat4 biasMatrix = mat4( 
-	0.5, 0.0, 0.0, 0.0,
-	0.0, 0.5, 0.0, 0.0,
-	0.0, 0.0, 1.0, 0.0,
-	0.5, 0.5, 0.0, 1.0 
-);
-
-//TODO: pass this in with material data.
-const float bumpMapIntensity = 1.0;
-
-bool flag(uint set, uint mask)
-{
-    return (set & mask) == mask;
-}
 
 bool sceneFlag(uint mask)
 {

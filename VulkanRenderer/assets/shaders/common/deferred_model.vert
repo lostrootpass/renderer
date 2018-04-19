@@ -1,6 +1,8 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+#include "../shadercommon.inc"
+
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec2 inUV;
 layout(location = 2) in vec3 inNormal;
@@ -13,36 +15,22 @@ layout(location = 3) out vec3 outViewVec;
 layout(location = 4) out vec4 outShadowCoord;
 layout(location = 5) flat out uint outMaterialId;
 
-layout(set = 0, binding = 0) uniform Camera {
-    mat4 projview;
-	mat4 invProj;
-    vec4 pos;
-	uint width;
-	uint height;
-} camera;
+layout(set = 0, binding = 0) uniform CameraUniform {
+	Camera camera;
+};
 
-layout(set = 1, binding = 0) uniform Model {
-    mat4 pos;
-    float scale;
-} model;
+layout(set = 1, binding = 0) uniform ModelUniform {
+	Model model;
+};
 
-layout(set = 4, binding = 0) uniform LightData {
-    mat4 mvp;
-    vec4 color;
-    vec3 pos;
-} lightData;
+layout(set = 4, binding = 0) uniform LightUniform {
+	LightData lightData;
+};
 
 out gl_PerVertex 
 {
     vec4 gl_Position;   
 };
-
-const mat4 biasMatrix = mat4( 
-	0.5, 0.0, 0.0, 0.0,
-	0.0, 0.5, 0.0, 0.0,
-	0.0, 0.0, 1.0, 0.0,
-	0.5, 0.5, 0.0, 1.0 
-);
 
 void main()
 {
