@@ -22,7 +22,9 @@ const uint SCENEFLAG_ENABLEPCF = 0x0040;
 
 const float bumpMapIntensity = 1.0;
 const float SHADOW_BIAS = 0.0005;
+const float SHADOW_BIAS_CUBE = 0.05;
 const float SHADOW_MUL = 0.3;
+const uint SHADOW_CUBE_SAMPLES = 20;
 
 const mat4 biasMatrix = mat4( 
 	0.5, 0.0, 0.0, 0.0,
@@ -32,9 +34,12 @@ const mat4 biasMatrix = mat4(
 );
 
 struct LightData {
-	mat4 mvp;
+	mat4 proj;
+	mat4 views[6];
 	vec4 color;
 	vec3 pos;
+	uint numViews;
+	float farPlane;
 };
 
 struct MaterialData {
@@ -65,3 +70,11 @@ bool flag(uint set, uint mask)
     return (set & mask) == mask;
 }
 
+vec3 shadowCubeSampleDirections[20] = vec3[]
+(
+   vec3( 1,  1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1,  1,  1), 
+   vec3( 1,  1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1,  1, -1),
+   vec3( 1,  1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1,  1,  0),
+   vec3( 1,  0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1,  0, -1),
+   vec3( 0,  1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0,  1, -1)
+);  

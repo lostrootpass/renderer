@@ -5,9 +5,15 @@
 
 layout(location = 0) in vec2 uv;
 layout(location = 1) flat in uint materialId;
+layout(location = 2) in vec3 fragPos;
+
+layout(location = 0) out float outFragDepth;
 
 layout(set = 2, binding = 0) uniform sampler texsampler;
 layout(set = 3, binding = 0) uniform texture2DArray materials[MATERIAL_COUNT];
+layout(set = 4, binding = 0) uniform LightUniform { 
+	LightData lightData;
+};
 layout(std140, set = 6, binding = 0) uniform MaterialUniform {
 	MaterialData materialData;
 };
@@ -26,5 +32,5 @@ void main() {
             discard;
     }
 
-    //gl_FragDepth gets written implicitly.
+	outFragDepth = length(lightData.pos - fragPos);// / lightData.farPlane;
 }

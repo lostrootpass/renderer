@@ -40,15 +40,23 @@ public:
 
 	void move(const glm::vec3& moveBy);
 
+	glm::mat4 projectionMatrix() const
+	{
+		glm::mat4 projectionMatrix = glm::perspective(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
+		projectionMatrix[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
+
+		return projectionMatrix;
+	}
+
 	glm::mat4 projectionViewMatrix() const
 	{
 
-		return _projection() * viewMatrix();
+		return projectionMatrix() * viewMatrix();
 	}
 
 	inline glm::mat4 inverseProjection() const
 	{
-		return glm::inverse(_projection());
+		return glm::inverse(projectionMatrix());
 	}
 
 	void update(float dtime);
@@ -106,14 +114,6 @@ private:
 		_rotation = glm::rotate(_rotation, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
 		_orientation = glm::mat4_cast(glm::normalize(_rotation));
-	}
-
-	glm::mat4 _projection() const
-	{
-		glm::mat4 projectionMatrix = glm::perspective(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
-		projectionMatrix[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
-
-		return projectionMatrix;
 	}
 };
 

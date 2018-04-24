@@ -10,3 +10,6 @@ moc_*
 gen/
 *.opendb
 *.blend1
+/VulkanRenderer/assets/models/sanMiguel
+/VulkanRenderer/assets/models/sibenik
+/VulkanRenderer/assets/models

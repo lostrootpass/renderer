@@ -5,10 +5,17 @@
 
 class Scene;
 
+enum class ShadowMapType
+{
+	SHADOW_MAP_2D,
+	SHADOW_MAP_CUBE
+};
+
 class ShadowMapRenderPass : public RenderPass
 {
 public:
-	ShadowMapRenderPass(Scene& scene) : _scene(&scene), _depthTexture(nullptr) {}
+	ShadowMapRenderPass(Scene& scene, ShadowMapType type) : _scene(&scene),
+		_depthTexture(nullptr), _type(type) {}
 
 	~ShadowMapRenderPass();
 
@@ -37,11 +44,13 @@ protected:
 	virtual void _createRenderPass() override;
 
 private:
-	VkFramebuffer _framebuffer;
+	std::vector<VkFramebuffer> _framebuffers;
 
 	Scene* _scene;
 
 	Texture* _depthTexture;
+
+	ShadowMapType _type;
 
 	void _createFramebuffer();
 };

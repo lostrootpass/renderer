@@ -38,6 +38,7 @@ void main()
     outUV = inUV;
     outNormal = normalize(mat3(model.pos) * inNormal);
     outLightVec = (lightData.pos - fragPos.xyz);
+    //outLightVec = normalize(lightData.pos - fragPos.xyz);
     outViewVec = normalize(camera.pos.xyz - fragPos.xyz);
     outShadowCoord = biasMatrix * lightData.proj * lightData.views[0] * fragPos;
     outMaterialId = inMaterialId;

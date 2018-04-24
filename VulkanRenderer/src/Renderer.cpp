@@ -46,7 +46,8 @@ void Renderer::allocateTextureDescriptor(VkDescriptorSet& set, SetBinding bindin
 	VkCheck(vkAllocateDescriptorSets(Renderer::device(), &alloc, &set));
 }
 
-void Renderer::copyBuffer(const Buffer& dst, const Buffer& src, VkDeviceSize size, VkDeviceSize offset) const
+void Renderer::copyBuffer(const Buffer& dst, const Buffer& src, 
+	VkDeviceSize size, VkDeviceSize offset) const
 {
 	VkCommandBuffer buffer = startOneShotCmdBuffer();
 
@@ -64,7 +65,8 @@ void Renderer::clearShaderCache()
 	ShaderCache::clear();
 }
 
-void Renderer::createAndBindBuffer(const VkBufferCreateInfo& info, Buffer& buffer, VkMemoryPropertyFlags flags) const
+void Renderer::createAndBindBuffer(const VkBufferCreateInfo& info, 
+	Buffer& buffer, VkMemoryPropertyFlags flags) const
 {
 	VkMemoryRequirements memReq;
 
@@ -208,6 +210,11 @@ void Renderer::init(const Window& window)
 		VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_textureLayout));
 
 		binding.descriptorCount = 1;
+		//info.bindingCount = 2;
+		//VkDescriptorSetLayoutBinding bindingMap = binding;
+		//bindingMap.binding = 1;
+		//VkDescriptorSetLayoutBinding shadowBindings[] = { binding, bindingMap };
+		//info.pBindings = shadowBindings;
 		VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_shadowLayout));
 	}
 
@@ -271,7 +278,9 @@ void Renderer::render()
 	_swapChain->present();
 }
 
-void Renderer::setImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange& range) const
+void Renderer::setImageLayout(VkImage image, VkFormat format, 
+	VkImageLayout oldLayout, VkImageLayout newLayout, 
+	VkImageSubresourceRange& range) const
 {
 	VkCommandBuffer buffer = startOneShotCmdBuffer();
 

@@ -112,9 +112,7 @@ void Scene::keyDown(SDL_Keycode key)
 		break;
 	//A hacky way of getting the light to move to a specific position. TODO: fix.
 	case SDLK_l:
-		_lights[0].pos = _camera->eye();
-		_lights[0].mvp = _camera->projectionViewMatrix();
-		_renderer->updateUniform("light", (void*)&_lights[0], sizeof(_lights[0]));
+		_setLightPos(_camera->eye());
 		break;
 	}
 
@@ -187,14 +185,35 @@ void Scene::_reload()
 
 void Scene::_setLightPos(const glm::vec3& pos)
 {
-	glm::mat4 mvp = glm::perspective(glm::radians(60.0f), 1.0f, 1.0f, 100.0f);
-	mvp[1][1] *= -1; //Vulkan's Y-axis points the opposite direction to OpenGL's.
+	glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 50.0f);
+	proj[1][1] *= -1; 
 
-	glm::mat4 view = glm::lookAt(pos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	mvp *= view;
+	_lights[0].pos = _camera->eye();
+	_lights[0].farPlane = 50.0f;
+	bool isPointLight = true; //TODO
+	if (isPointLight)
+	{
+		_lights[0].numViews = 6;
+		_lights[0].proj = proj;
 
-	Light& light = _lights[0];
-	light.pos = pos;
-	light.mvp = mvp;
-	_renderer->updateUniform("light", (void*)&light, sizeof(light));
+		glm::vec3 x = glm::vec3(1.0f, 0.0f, 0.0f);
+		glm::vec3 y = glm::vec3(0.0f, 1.0f, 0.0f);
+		glm::vec3 z = glm::vec3(0.0f, 0.0f, 1.0f);
+
+		_lights[0].views[0] = glm::lookAt(pos, pos + x, -y);
+		_lights[0].views[1] = glm::lookAt(pos, pos - x, -y);
+		_lights[0].views[2] = glm::lookAt(pos, pos - y, -z);
+		_lights[0].views[3] = glm::lookAt(pos, pos + y, +z);
+		_lights[0].views[4] = glm::lookAt(pos, pos + z, -y);
+		_lights[0].views[5] = glm::lookAt(pos, pos - z, -y);
+	}
+	else
+	{
+		//Flat shadow map (directional light)
+		_lights[0].numViews = 1;
+		_lights[0].proj = _camera->projectionMatrix();
+		_lights[0].views[0] = _camera->viewMatrix();
+	}
+
+	_renderer->updateUniform("light", (void*)&_lights[0], sizeof(Light));
 }

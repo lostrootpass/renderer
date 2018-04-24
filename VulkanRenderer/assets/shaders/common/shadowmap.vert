@@ -10,6 +10,7 @@ layout(location = 3) in uint inMaterialId;
 
 layout(location = 0) out vec2 uv;
 layout(location = 1) flat out uint materialId;
+layout(location = 2) out vec3 outFragPos;
 
 layout(set = 1, binding = 0) uniform ModelUniform {
 	Model model;
@@ -17,6 +18,10 @@ layout(set = 1, binding = 0) uniform ModelUniform {
 
 layout(set = 4, binding = 0) uniform LightUniform {
 	LightData lightData;
+};
+
+layout(push_constant) uniform FaceData {
+	uint face;
 };
 
 out gl_PerVertex 
@@ -29,5 +34,6 @@ void main()
     uv = inUV;
     materialId = inMaterialId;
     vec4 fragPos = model.pos * vec4(inPos * model.scale, 1.0);
-    gl_Position = lightData.mvp * fragPos;
+    gl_Position = lightData.proj * lightData.views[face] * fragPos;
+	outFragPos = fragPos.xyz;
 }

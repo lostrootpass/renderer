@@ -368,6 +368,12 @@ void SceneRenderPass::_createPipelineLayout()
 
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	//info.bindingCount = 2;
+	//bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	//bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	//bindings[1].binding = 1;
+	//bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	//bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_SHADOW]));
 
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;

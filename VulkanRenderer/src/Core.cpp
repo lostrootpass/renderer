@@ -46,7 +46,7 @@ void Core::run(int argc, char** argv)
 		_scene->update(dtime.count());
 		_renderer->render();
 
-		Sleep(10);
+		//Sleep(10);
 	}
 
 	_shutdown();
@@ -65,12 +65,13 @@ void Core::_init()
 	_scene = new Scene(*_renderer);
 
 	//TODO: specify/load renderpasses elsewhere
-	RenderPass* shadow = new ShadowMapRenderPass(*_scene);
+	RenderPass* shadow = new ShadowMapRenderPass(*_scene, 
+		ShadowMapType::SHADOW_MAP_CUBE);
 	_renderer->addRenderPass(shadow);
 
 	//TODO: allow runtime toggling
-	//_renderer->addRenderPass(new SceneRenderPass(*_scene, *shadow));
-	_renderer->addRenderPass(new DeferredSceneRenderPass(*_scene, *shadow));
+	_renderer->addRenderPass(new SceneRenderPass(*_scene, *shadow));
+	//_renderer->addRenderPass(new DeferredSceneRenderPass(*_scene, *shadow));
 
 
 	//Example postprocess chain setup:

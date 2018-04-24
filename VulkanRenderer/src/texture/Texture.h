@@ -15,7 +15,8 @@ class Texture
 public:
 	Texture(const std::string& path, Renderer* renderer);
 
-	Texture(uint32_t width, uint32_t height, VkFormat format, Renderer* renderer);
+	Texture(uint32_t width, uint32_t height, VkFormat format, 
+		VkImageViewType viewType, Renderer* renderer);
 
 	~Texture();
 
@@ -32,7 +33,12 @@ public:
 
 	inline const VkImageView view() const
 	{
-		return _view;
+		return _views[0];
+	}
+
+	inline const std::vector<VkImageView>& views() const
+	{
+		return _views;
 	}
 
 protected:
@@ -41,8 +47,8 @@ protected:
 		_format(VK_FORMAT_R8G8B8A8_UNORM), _width(0), _height(0)
 	{};
 
+	std::vector<VkImageView> _views;
 	VkImage _image;
-	VkImageView _view;
 	VkDeviceMemory _memory;
 	VkDescriptorSet _set;
 

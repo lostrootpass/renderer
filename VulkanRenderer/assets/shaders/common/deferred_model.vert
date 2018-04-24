@@ -39,7 +39,7 @@ void main()
     outNormal = normalize(mat3(model.pos) * inNormal);
     outLightVec = normalize(lightData.pos - fragPos.xyz);
     outViewVec = normalize(camera.pos.xyz - fragPos.xyz);
-    outShadowCoord = biasMatrix * lightData.mvp * fragPos;
+    outShadowCoord = biasMatrix * lightData.proj * lightData.views[0] * fragPos;
     outMaterialId = inMaterialId;
 
     gl_Position =  camera.projview * fragPos;

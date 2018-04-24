@@ -6,7 +6,11 @@
 #include "../ShaderCache.h"
 
 const uint32_t SHADOW_DIM = 1024;
+
+//For cubes we want to use an unnormalised format to avoid banding
+//this also allows us to add other channels for debugging if we need them
 const VkFormat SHADOW_MAP_FORMAT = VK_FORMAT_D32_SFLOAT;
+const VkFormat SHADOW_MAP_FORMAT_CUBE = VK_FORMAT_R32_SFLOAT; //or D32_SFLOAT
 
 //TODO: retrieve from global config.
 const uint32_t MAX_MATERIALS = 64;
@@ -15,13 +19,17 @@ const uint32_t MAX_MODELS = 64;
 
 ShadowMapRenderPass::~ShadowMapRenderPass()
 {
-	vkDestroyFramebuffer(Renderer::device(), _framebuffer, nullptr);
+	for(VkFramebuffer fb : _framebuffers)
+		vkDestroyFramebuffer(Renderer::device(), fb, nullptr);
 
 	delete _depthTexture;
 }
 
 void ShadowMapRenderPass::init(Renderer* renderer)
 {
+	const size_t layers = (_type == ShadowMapType::SHADOW_MAP_CUBE) ? 6 : 1;
+	_framebuffers.resize(layers, VK_NULL_HANDLE);
+
 	_createRenderPass();
 	_createPipelineLayout();
 	_createDescriptorSets(renderer);
@@ -31,36 +39,54 @@ void ShadowMapRenderPass::init(Renderer* renderer)
 
 void ShadowMapRenderPass::recreateShadowMap(Renderer* renderer)
 {
-	_depthTexture = new Texture(SHADOW_DIM, SHADOW_DIM, SHADOW_MAP_FORMAT, renderer);
-	_depthTexture->bind(renderer, 0);
+	const bool cube = (_type == ShadowMapType::SHADOW_MAP_CUBE);
+	const VkImageViewType viewType = (cube) ?
+		VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
+	const VkFormat format = (cube) ? SHADOW_MAP_FORMAT_CUBE : SHADOW_MAP_FORMAT;
+	_depthTexture = new Texture(SHADOW_DIM, SHADOW_DIM, format,	viewType,
+		renderer);
+	_depthTexture->bind(renderer, 0, (cube) ? 0 : 1);
 
 	_createFramebuffer();
 }
 
 void ShadowMapRenderPass::render(VkCommandBuffer cmd, const Framebuffer*)
 {
-	VkClearValue clear = { 1.0f, 0.0f };
+	VkClearValue clear = { 1.0f, 0 };
+
+	//Use color clears for non-depth formats
+	if(SHADOW_MAP_FORMAT_CUBE != VK_FORMAT_D32_SFLOAT)
+		clear.color = { std::numeric_limits<float>::max() };
+
 	VkRenderPassBeginInfo info = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
 	info.clearValueCount = 1;
 	info.pClearValues = &clear;
 	info.renderPass = _renderPass;
 	info.renderArea.offset = { 0, 0 };
 	info.renderArea.extent = { SHADOW_DIM, SHADOW_DIM };
-	info.framebuffer = _framebuffer;
 
-	VkViewport viewport = { 0, 0, (float)SHADOW_DIM, (float)SHADOW_DIM, 0.0f, 1.0f };
+	VkViewport viewport = {
+		0, 0, (float)SHADOW_DIM, (float)SHADOW_DIM, 0.0f, 1.0f
+	};
 	VkRect2D scissor = { 0, 0, SHADOW_DIM, SHADOW_DIM };
 
 	vkCmdSetViewport(cmd, 0, 1, &viewport);
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	vkCmdBeginRenderPass(cmd, &info, VK_SUBPASS_CONTENTS_INLINE);
+	for (uint32_t i = 0; i < _framebuffers.size(); ++i)
+	{
+		info.framebuffer = _framebuffers[i];
+		vkCmdBeginRenderPass(cmd, &info, VK_SUBPASS_CONTENTS_INLINE);
 
-	if (_scene)
-		_scene->drawShadow(cmd, *this);
+		const uint32_t pushConstants[] = { i };
+		vkCmdPushConstants(cmd, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 
+			0, sizeof(pushConstants), pushConstants);
 
-	vkCmdEndRenderPass(cmd);
+		if (_scene)
+			_scene->drawShadow(cmd, *this);
 
+		vkCmdEndRenderPass(cmd);
+	}
 }
 
 void ShadowMapRenderPass::_createDescriptorSets(Renderer* renderer)
@@ -88,7 +114,8 @@ void ShadowMapRenderPass::_createDescriptorSets(Renderer* renderer)
 	pool.pPoolSizes = sizes;
 	pool.maxSets = SET_BINDING_COUNT + MAX_TEXTURES;
 
-	VkCheck(vkCreateDescriptorPool(Renderer::device(), &pool, nullptr, &_descriptorPool));
+	VkCheck(vkCreateDescriptorPool(Renderer::device(), &pool, nullptr, 
+		&_descriptorPool));
 
 	VkDescriptorSetAllocateInfo alloc = {};
 	alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -98,7 +125,8 @@ void ShadowMapRenderPass::_createDescriptorSets(Renderer* renderer)
 
 	_descriptorSets.resize(SET_BINDING_COUNT);
 
-	VkCheck(vkAllocateDescriptorSets(Renderer::device(), &alloc, _descriptorSets.data()));
+	VkCheck(vkAllocateDescriptorSets(Renderer::device(), &alloc,
+		_descriptorSets.data()));
 
 	{
 		VkDescriptorBufferInfo buff = {};
@@ -195,11 +223,18 @@ void ShadowMapRenderPass::_createPipeline(const std::string& shaderName)
 	stages[1].module = ShaderCache::getModule(shaderName + ".frag");
 
 	VkPipelineColorBlendAttachmentState cba = {};
-	cba.blendEnable = VK_FALSE;
-	cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	cba.blendEnable = VK_TRUE;
+	cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
+	cba.colorBlendOp = VK_BLEND_OP_MIN;
 
 	VkPipelineColorBlendStateCreateInfo cbs = {};
 	cbs.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+
+	if (_type == ShadowMapType::SHADOW_MAP_CUBE)
+	{
+		cbs.attachmentCount = 1;
+		cbs.pAttachments = &cba;
+	}
 
 	VkPipelineInputAssemblyStateCreateInfo ias = {};
 	ias.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -212,7 +247,8 @@ void ShadowMapRenderPass::_createPipeline(const std::string& shaderName)
 
 	VkPipelineRasterizationStateCreateInfo rs = {};
 	rs.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rs.cullMode = VK_CULL_MODE_BACK_BIT;
+	//rs.cullMode = VK_CULL_MODE_BACK_BIT;
+	rs.cullMode = VK_CULL_MODE_NONE;
 	rs.polygonMode = VK_POLYGON_MODE_FILL;
 	rs.lineWidth = 1.0f;
 	rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
@@ -271,7 +307,9 @@ void ShadowMapRenderPass::_createPipeline(const std::string& shaderName)
 	dss.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	dss.depthWriteEnable = VK_TRUE;
 
-	VkDynamicState dynStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+	VkDynamicState dynStates[] = { 
+		VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR
+	};
 	VkPipelineDynamicStateCreateInfo dys = {};
 	dys.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 	dys.dynamicStateCount = 2;
@@ -293,7 +331,8 @@ void ShadowMapRenderPass::_createPipeline(const std::string& shaderName)
 	info.pDepthStencilState = &dss;
 	info.pDynamicState = &dys;
 
-	VkCheck(vkCreateGraphicsPipelines(Renderer::device(), VK_NULL_HANDLE, 1, &info, nullptr, &pipeline));
+	VkCheck(vkCreateGraphicsPipelines(Renderer::device(), VK_NULL_HANDLE, 1, 
+		&info, nullptr, &pipeline));
 
 	_pipelines[shaderName] = pipeline;
 }
@@ -313,42 +352,54 @@ void ShadowMapRenderPass::_createPipelineLayout()
 
 	_descriptorLayouts.resize(SET_BINDING_COUNT);
 
-	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_CAMERA]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr,
+		&_descriptorLayouts[SET_BINDING_CAMERA]));
 
 	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_MODEL]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr,
+		&_descriptorLayouts[SET_BINDING_MODEL]));
 
 	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	bindings[0].descriptorCount = 1;
-	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_SAMPLER]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr,
+		&_descriptorLayouts[SET_BINDING_SAMPLER]));
 
 	info.bindingCount = 1;
 	bindings[0].binding = 0;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[0].descriptorCount = MAX_MATERIALS;
-	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_TEXTURE]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr,
+		&_descriptorLayouts[SET_BINDING_TEXTURE]));
 
 	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	bindings[0].descriptorCount = 1;
 	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
-	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_LIGHTS]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr,
+		&_descriptorLayouts[SET_BINDING_LIGHTS]));
 
+	info.bindingCount = 2;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_SHADOW]));
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr,
+		&_descriptorLayouts[SET_BINDING_SHADOW]));
 
+	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	bindings[0].descriptorCount = 1;
-	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_MATERIAL]));
+	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr,
+		&_descriptorLayouts[SET_BINDING_MATERIAL]));
 
 	VkPushConstantRange pushConstants;
 	pushConstants.offset = 0;
 	pushConstants.size = sizeof(uint32_t);
-	pushConstants.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -357,7 +408,8 @@ void ShadowMapRenderPass::_createPipelineLayout()
 	layoutCreateInfo.pushConstantRangeCount = 1;
 	layoutCreateInfo.pPushConstantRanges = &pushConstants;
 
-	VkCheck(vkCreatePipelineLayout(Renderer::device(), &layoutCreateInfo, nullptr, &_pipelineLayout));
+	VkCheck(vkCreatePipelineLayout(Renderer::device(), &layoutCreateInfo,
+		nullptr, &_pipelineLayout));
 }
 
 void ShadowMapRenderPass::_createFramebuffer()
@@ -373,18 +425,36 @@ void ShadowMapRenderPass::_createFramebuffer()
 	info.attachmentCount = 1;
 	info.pAttachments = attachments;
 
-	VkCheck(vkCreateFramebuffer(Renderer::device(), &info, nullptr, &_framebuffer));
+	const std::vector<VkImageView>& views = _depthTexture->views();
+	for (size_t i = 0; i < _framebuffers.size(); ++i)
+	{
+		info.pAttachments = &views[i];
+		VkCheck(vkCreateFramebuffer(Renderer::device(), &info, nullptr,
+			&_framebuffers[i]));
+	}
 }
 
 void ShadowMapRenderPass::_createRenderPass()
 {
+	const bool cube = (_type == ShadowMapType::SHADOW_MAP_CUBE);
+
 	VkAttachmentReference attach = {};
 	attach.attachment = 0;
-	attach.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkSubpassDescription subpass = {};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.pDepthStencilAttachment = &attach;
+
+	if (cube)
+	{
+		attach.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		subpass.pColorAttachments = &attach;
+		subpass.colorAttachmentCount = 1;
+	}
+	else
+	{
+		attach.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		subpass.pDepthStencilAttachment = &attach;
+	}
 
 	VkAttachmentDescription desc = {};
 	desc.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -393,14 +463,41 @@ void ShadowMapRenderPass::_createRenderPass()
 	desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-	desc.format = SHADOW_MAP_FORMAT;
+	desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	desc.format = cube? SHADOW_MAP_FORMAT_CUBE : SHADOW_MAP_FORMAT;
+
+	VkSubpassDependency dependencies[2] = {};
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstAccessMask = 
+		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcAccessMask = 
+		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
 	VkRenderPassCreateInfo info = { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
 	info.subpassCount = 1;
 	info.pSubpasses = &subpass;
 	info.attachmentCount = 1;
 	info.pAttachments = &desc;
+	info.dependencyCount = 2;
+	info.pDependencies = dependencies;
 
 	VkCheck(vkCreateRenderPass(Renderer::device(), &info, nullptr, &_renderPass));
 }
