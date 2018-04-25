@@ -269,8 +269,23 @@ void Renderer::recreateSwapChain(uint32_t width, uint32_t height)
 {
 	vkDeviceWaitIdle(_device);
 	_swapChain->resize(width, height);
+	_extent = _swapChain->surfaceCapabilities().currentExtent;
 	_allocateBackbufferRenderTargets();
+
+	for (RenderPass* pass : _renderPasses)
+	{
+		pass->resize(width, height);
+	}
+	
 	_allocateCommandBuffers();
+}
+
+void Renderer::reload()
+{
+	for (RenderPass* p : _renderPasses)
+	{
+		p->reload();
+	}
 }
 
 void Renderer::render()

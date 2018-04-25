@@ -174,6 +174,7 @@ void Scene::_reload()
 {
 	_renderer->clearShaderCache();
 	_renderer->destroyPipelines();
+	_renderer->reload();
 
 	for (Model* m : _models)
 	{

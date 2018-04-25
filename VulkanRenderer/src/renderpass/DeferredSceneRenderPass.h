@@ -17,7 +17,11 @@ public:
 
 	virtual void init(Renderer* renderer) override;
 
+	virtual void reload() override;
+
 	virtual void render(VkCommandBuffer cmd, const Framebuffer* framebuffer = nullptr) override;
+
+	virtual void resize(uint32_t width, uint32_t height) override;
 
 	inline virtual RenderPassType type() {
 		return RenderPassType::SCENE;
@@ -33,6 +37,8 @@ protected:
 	virtual void _createRenderPass() override;
 
 private:
+	void _cleanupDeferredTargets();
+
 	void _createRenderTargets(Renderer* renderer);
 
 	void _createDeferredLayout();

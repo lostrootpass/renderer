@@ -29,20 +29,7 @@ DeferredSceneRenderPass::~DeferredSceneRenderPass()
 	for (VkDescriptorSetLayout l : _deferredSetLayouts)
 		vkDestroyDescriptorSetLayout(d, l, nullptr);
 
-	for (DeferredFramebuffer& fb : _deferredFramebuffers)
-	{
-		vkDestroyImageView(d, fb.view, nullptr);
-		vkDestroyImageView(d, fb.normalView, nullptr);
-		vkDestroyImageView(d, fb.depthView, nullptr);
-
-		vkDestroyImage(d, fb.image, nullptr);
-		vkDestroyImage(d, fb.normalImage, nullptr);
-		vkDestroyImage(d, fb.depthImage, nullptr);
-
-		vkFreeMemory(d, fb.memory, nullptr);
-		vkFreeMemory(d, fb.normalMemory, nullptr);
-		vkFreeMemory(d, fb.depthMemory, nullptr);
-	}
+	_cleanupDeferredTargets();
 
 	vkDestroyRenderPass(d, _geometryPass, nullptr);
 }
@@ -67,8 +54,14 @@ void DeferredSceneRenderPass::init(Renderer* renderer)
 
 	_createDeferredLayout();
 	_createDeferredPipeline();
+}
 
-	_createRenderTargets(renderer);
+void DeferredSceneRenderPass::reload()
+{
+	vkDeviceWaitIdle(Renderer::device());
+	vkDestroyPipeline(Renderer::device(), _deferredPipeline, nullptr);
+	_deferredPipeline = VK_NULL_HANDLE;
+	_createDeferredPipeline();
 }
 
 void DeferredSceneRenderPass::render(VkCommandBuffer cmd, const Framebuffer* framebuffer)
@@ -113,6 +106,26 @@ void DeferredSceneRenderPass::render(VkCommandBuffer cmd, const Framebuffer* fra
 	vkCmdEndRenderPass(cmd);
 
 
+	//Convert RTs from COLOR_ATTACHMENT_OPTIMAL to SHADER_READ_ONLY_OPTIMAL
+	VkImageMemoryBarrier memBarriers[3] = {};
+	memBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	memBarriers[0].image = _deferredFramebuffers[0].image;
+	memBarriers[0].oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	memBarriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	memBarriers[0].srcAccessMask = 0;
+	memBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	memBarriers[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	memBarriers[0].subresourceRange.layerCount = 1;
+	memBarriers[0].subresourceRange.levelCount = 1;
+
+	memBarriers[2] = memBarriers[1] = memBarriers[0];
+	memBarriers[1].image = _deferredFramebuffers[0].normalImage;
+	memBarriers[2].image = _deferredFramebuffers[0].depthImage;
+	memBarriers[2].oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	memBarriers[2].subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_DEPENDENCY_BY_REGION_BIT,
+		0, nullptr, 0, nullptr, 3, memBarriers);
 	
 	//Then do the shading pass
 	VkClearValue clrValues[] = {
@@ -143,6 +156,12 @@ void DeferredSceneRenderPass::render(VkCommandBuffer cmd, const Framebuffer* fra
 	vkCmdDraw(cmd, 4, 1, 0, 0);
 
 	vkCmdEndRenderPass(cmd);
+}
+
+void DeferredSceneRenderPass::resize(uint32_t width, uint32_t height)
+{
+	_cleanupDeferredTargets();
+	_createRenderTargets(_renderer);
 }
 
 void DeferredSceneRenderPass::_createDescriptorSets(Renderer* renderer)
@@ -478,11 +497,15 @@ void DeferredSceneRenderPass::_createPipelineLayout()
 	bindings[0].descriptorCount = 1;
 	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_LIGHTS]));
-
+	
+	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	//bindings[1] = bindings[0];
+	//bindings[1].binding = 1;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_SHADOW]));
 
+	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	bindings[0].descriptorCount = 1;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_MATERIAL]));
@@ -507,7 +530,8 @@ void DeferredSceneRenderPass::_createRenderPass()
 	//Color
 	VkAttachmentDescription attachDesc = {};
 	attachDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	//attachDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	attachDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	//attachDesc.format = VK_FORMAT_B8G8R8A8_UNORM;
 	attachDesc.format = VK_FORMAT_R16G16B16A16_UINT;
 	attachDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -523,8 +547,9 @@ void DeferredSceneRenderPass::_createRenderPass()
 	//Normal
 	VkAttachmentDescription normalAttachDesc = {};
 	normalAttachDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	normalAttachDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	//normalAttachDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 	//normalAttachDesc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	normalAttachDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	normalAttachDesc.format = VK_FORMAT_B8G8R8A8_UNORM;
 	normalAttachDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	normalAttachDesc.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -563,14 +588,40 @@ void DeferredSceneRenderPass::_createRenderPass()
 	depthDesc.format = VK_FORMAT_D32_SFLOAT;
 
 
-	VkSubpassDependency dependency = {};
-	dependency.srcAccessMask = 0;
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	//VkSubpassDependency dependency = {};
+	//dependency.srcAccessMask = 0;
+	//dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	//dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
 
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.dstSubpass = 0;
+	//dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	//dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	//dependency.dstSubpass = 0;
+
+	VkSubpassDependency dependencies[2] = {};
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstAccessMask = 
+		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcAccessMask = 
+		VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+		VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
 
 	VkAttachmentDescription attachments[] = { 
 		attachDesc, normalAttachDesc, depthDesc
@@ -581,20 +632,45 @@ void DeferredSceneRenderPass::_createRenderPass()
 	info.pAttachments = attachments;
 	info.subpassCount = 1;
 	info.pSubpasses = &subpass;
-	info.dependencyCount = 1;
-	info.pDependencies = &dependency;
+	info.dependencyCount = 2;
+	info.pDependencies = dependencies;
 
 	VkCheck(vkCreateRenderPass(Renderer::device(), &info, nullptr, &_geometryPass));
 
 	depthAttach.attachment = 1;
 	attachDesc.format = VK_FORMAT_B8G8R8A8_UNORM;
+	attachDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	depthDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 	VkAttachmentDescription shadingAttachments[] = { 
 		attachDesc, depthDesc
 	};
 	info.pAttachments = shadingAttachments;
 	info.attachmentCount = 2;
+	//info.dependencyCount = 2;
 	subpass.colorAttachmentCount = 1;
 	VkCheck(vkCreateRenderPass(Renderer::device(), &info, nullptr, &_renderPass));
+}
+
+void DeferredSceneRenderPass::_cleanupDeferredTargets()
+{
+	VkDevice d = Renderer::device();
+
+	for (DeferredFramebuffer& fb : _deferredFramebuffers)
+	{
+		vkDestroyImageView(d, fb.view, nullptr);
+		vkDestroyImageView(d, fb.normalView, nullptr);
+		vkDestroyImageView(d, fb.depthView, nullptr);
+
+		vkDestroyImage(d, fb.image, nullptr);
+		vkDestroyImage(d, fb.normalImage, nullptr);
+		vkDestroyImage(d, fb.depthImage, nullptr);
+
+		vkFreeMemory(d, fb.memory, nullptr);
+		vkFreeMemory(d, fb.normalMemory, nullptr);
+		vkFreeMemory(d, fb.depthMemory, nullptr);
+	}
+
+	_deferredFramebuffers.clear();
 }
 
 void DeferredSceneRenderPass::_createRenderTargets(Renderer* renderer)

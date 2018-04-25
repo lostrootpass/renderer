@@ -68,6 +68,8 @@ public:
 
 	void recreateSwapChain(uint32_t width = 0, uint32_t height = 0);
 
+	void reload();
+
 	void render();
 
 	void setImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageSubresourceRange& range) const;

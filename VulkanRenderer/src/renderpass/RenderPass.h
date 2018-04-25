@@ -37,6 +37,8 @@ public:
 
 	virtual void init(Renderer* renderer) = 0;
 
+	virtual void reload() {};
+
 	virtual void render(VkCommandBuffer cmd, const Framebuffer* framebuffer = nullptr) = 0;
 
 	void updatePushConstants(VkCommandBuffer cmd, size_t size, void* data) const;
@@ -45,6 +47,8 @@ public:
 	{
 		return _renderPass;
 	}
+
+	virtual void resize(uint32_t width, uint32_t height) {};
 
 	inline virtual RenderPassType type() = 0;
 
