@@ -18,7 +18,7 @@ layout(set = 3, binding = 0) uniform texture2DArray materials[MATERIAL_COUNT];
 layout(set = 4, binding = 0) uniform LightUniform {
 	LightData lightData;
 };
-layout(set = 5, binding = 0) uniform texture2D shadowMap;
+layout(set = 5, binding = 0) uniform texture2D shadowCube;
 
 layout(std140, set = 6, binding = 0) uniform MaterialUniform {
 	MaterialData materialData;

@@ -18,7 +18,7 @@ layout(set = 4, binding = 0) uniform LightUniform {
 	LightData lightData;
 };
 layout(set = 5, binding = 0) uniform textureCube shadowCube;
-layout(set = 5, binding = 1) uniform texture2D shadowMap;
+//layout(set = 5, binding = 1) uniform texture2D shadowMap;
 layout(std140, set = 6, binding = 0) uniform MaterialUniform {
 	MaterialData materialData;
 };
@@ -69,7 +69,8 @@ float sampleShadowMap(vec2 offset)
 {
     vec4 coord = shadowCoord/ shadowCoord.w;
 	vec2 shadowUV = coord.xy + offset;
-	vec4 shadow = texture(sampler2D(shadowMap, texsampler), shadowUV);
+	//vec4 shadow = texture(sampler2D(shadowMap, texsampler), shadowUV);
+	vec4 shadow = vec4(1.0);
     if(coord.z > shadow.r + SHADOW_BIAS)
         return SHADOW_MUL;
     else
