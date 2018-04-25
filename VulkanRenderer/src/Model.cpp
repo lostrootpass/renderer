@@ -34,6 +34,7 @@ void Model::draw(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass)
 	std::vector<uint32_t> matOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(MaterialData))*_index};
 	pass.bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
 
+	pass.bindDescriptorSet(cmd, SET_BINDING_TEXTURE, *_materialSet);
 	for (TextureArray* m : _materials)
 	{
 		if(m && m->set())
@@ -66,6 +67,7 @@ void Model::drawGeom(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass)
 	std::vector<uint32_t> matOffsets = {(uint32_t)renderer->getAlignedRange(sizeof(MaterialData))*_index};
 	pass.bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
 
+	pass.bindDescriptorSet(cmd, SET_BINDING_TEXTURE, *_materialSet);
 	for (TextureArray* m : _materials)
 	{
 		if(m && m->set())
@@ -96,6 +98,7 @@ void Model::drawShadow(Renderer* renderer, VkCommandBuffer cmd, RenderPass& pass
 	std::vector<uint32_t> matOffsets = { (uint32_t)renderer->getAlignedRange(sizeof(MaterialData))*_index };
 	pass.bindDescriptorSetById(cmd, SET_BINDING_MATERIAL, &matOffsets);
 
+	pass.bindDescriptorSet(cmd, SET_BINDING_TEXTURE, *_materialSet);
 	for (TextureArray* m : _materials)
 	{
 		if (m && m->set())
@@ -133,8 +136,10 @@ void Model::update(Renderer* renderer, float dtime)
 	//model.pos = glm::rotate(model.pos, glm::radians(-90.0f) * (time/2.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
 	//TODO: Don't update the GPU-local memory here, just the staging buffer.
-	renderer->updateUniform("model", (void*)&model, sizeof(model), renderer->getAlignedRange(sizeof(model)) * _index);
-	renderer->updateUniform("material", (void*)&_materialData, sizeof(_materialData), renderer->getAlignedRange(sizeof(_materialData)) * _index);
+	renderer->updateUniform("model", (void*)&model, sizeof(model), 
+		renderer->getAlignedRange(sizeof(model)) * _index);
+	renderer->updateUniform("material", (void*)&_materialData, 
+		sizeof(_materialData), renderer->getAlignedRange(sizeof(_materialData)) * _index);
 }
 
 void Model::_load(Renderer* renderer)
@@ -310,7 +315,7 @@ void Model::_loadModel(Renderer* renderer)
 				attrib.vertices[3 * i.vertex_index + 2] * scale,
 			};
 
-			if (attrib.texcoords.size())
+			if (attrib.texcoords.size() && i.texcoord_index != -1)
 			{
 				vtx.uv = {
 					attrib.texcoords[2 * i.texcoord_index],
