@@ -5,6 +5,21 @@
 #include "../Renderer.h"
 #include "TextureCache.h"
 
+static bool isDepthFormat(VkFormat format)
+{
+	switch (format)
+	{
+	case VK_FORMAT_D16_UNORM:
+	case VK_FORMAT_D16_UNORM_S8_UINT:
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+	case VK_FORMAT_D32_SFLOAT:
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		return true;
+		break;
+	}
+	return false;
+}
+
 Texture::Texture(const std::string& path, Renderer* renderer)
 	: _path(path), _format(VK_FORMAT_R8G8B8A8_UNORM), _set(VK_NULL_HANDLE),
 	_layers(1), _viewType(VK_IMAGE_VIEW_TYPE_2D), _width(0), _height(0)
@@ -125,6 +140,45 @@ void Texture::unbind(Renderer* renderer, VkDescriptorSet set, uint32_t binding,
 	vkUpdateDescriptorSets(Renderer::device(), 1, &write, 0, nullptr);
 }
 
+void Texture::setImageData(Renderer* renderer, void* data, size_t len)
+{
+	VkBufferCreateInfo buff = {};
+	buff.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	buff.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	buff.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	buff.size = len;
+	renderer->createAndBindBuffer(buff, _staging, 
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	_staging.copyData(data, len, 0);
+
+	VkImageSubresourceRange range = {};
+	range.layerCount = _layers;
+	range.levelCount = 1;
+	range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	renderer->setImageLayout(_image, _format, VK_IMAGE_LAYOUT_UNDEFINED, 
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, range);
+
+	VkBufferImageCopy copy = {};
+	copy.imageExtent = { _width, _height, 1 };
+	copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copy.imageSubresource.baseArrayLayer = 0;
+	copy.imageSubresource.mipLevel = 0;
+	copy.imageSubresource.layerCount = 1;
+	copy.bufferOffset = 0;
+	copy.bufferImageHeight = _height;
+	copy.bufferRowLength = _width;
+
+	VkCommandBuffer cmd = renderer->startOneShotCmdBuffer();
+	vkCmdCopyBufferToImage(cmd, _staging.buffer, _image, 
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+	renderer->submitOneShotCmdBuffer(cmd);
+
+	renderer->setImageLayout(_image, _format, 
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, range);
+}
+
 void Texture::_allocBindImageMemory(Renderer* renderer)
 {
 	VkMemoryRequirements memReq;
@@ -183,17 +237,19 @@ void Texture::_createImage(Renderer* renderer, VkImageCreateInfo& info)
 
 void Texture::_createInMemory(Renderer* renderer)
 {
+	const bool isDepth = isDepthFormat(_format);
+
 	VkExtent3D extent = { _width, _height, 1 };
 	_extents.push_back(extent);
 
 	const uint32_t layers = (_viewType == VK_IMAGE_VIEW_TYPE_CUBE) ? 6 : 1;
 
 	VkImageCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
-	info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
-	if (layers == 6)
-		info.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	else
+	info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	if (isDepth)
 		info.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	else
+		info.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 	info.tiling = VK_IMAGE_TILING_OPTIMAL;
 	info.extent = { _width,_height, 1 };
@@ -217,10 +273,10 @@ void Texture::_createInMemory(Renderer* renderer)
 	view.viewType = _viewType;
 	view.image = _image;
 
-	if (layers == 6)
-		view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	else
+	if (isDepth)
 		view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	else
+		view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	view.subresourceRange.baseMipLevel = 0;
 	view.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 	view.subresourceRange.levelCount = 1;
@@ -232,7 +288,14 @@ void Texture::_createInMemory(Renderer* renderer)
 		VkCheck(vkCreateImageView(Renderer::device(), &view, nullptr, &_views[i]));
 	}
 
-	renderer->allocateTextureDescriptor(_set, SET_BINDING_SHADOW);
+	SetBinding b = SET_BINDING_TEXTURE;
+	//TODO: shadow cubemaps don't use depth formats, but not all cubemaps
+	// are shadow maps so this needs to be revisited.
+	if (isDepth || layers == 6)
+		b = SET_BINDING_SHADOW;
+
+	if(b == SET_BINDING_SHADOW)
+		renderer->allocateTextureDescriptor(_set, b);
 }
 
 void Texture::_updateSet(Renderer* renderer, VkDescriptorSet set, 

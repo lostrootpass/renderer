@@ -662,9 +662,9 @@ void Renderer::_createSwapChain()
 
 void Renderer::_createUniforms()
 {
-	createUniform("camera", sizeof(CameraUniform));
+	createUniform("camera", getAlignedRange(sizeof(CameraUniform)));
 	createUniform("model", getAlignedRange(sizeof(ModelUniform)) * MAX_MODELS);
-	createUniform("light", sizeof(Light));
+	createUniform("light", getAlignedRange(sizeof(Light)));
 	createUniform("material", getAlignedRange(sizeof(MaterialData)) * MAX_MODELS);
 }
 

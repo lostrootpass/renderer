@@ -381,7 +381,7 @@ void ShadowMapRenderPass::_createPipelineLayout()
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr,
 		&_descriptorLayouts[SET_BINDING_LIGHTS]));
 
-	info.bindingCount = 2;
+	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	bindings[1].binding = 1;

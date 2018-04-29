@@ -26,6 +26,8 @@ public:
 
 	void unbind(Renderer* renderer, VkDescriptorSet set = VK_NULL_HANDLE, uint32_t binding = 0, uint32_t index = 0);
 
+	void setImageData(Renderer* renderer, void* data, size_t len);
+
 	inline const VkDescriptorSet& set() const
 	{
 		return _set;

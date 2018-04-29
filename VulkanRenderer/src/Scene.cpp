@@ -5,13 +5,14 @@
 //TODO: move these?
 enum SceneFlags
 {
-	SCENEFLAG_ENABLESHADOWS = 0x0001,
-	SCENEFLAG_PRELIT = 0x0002,
-	SCENEFLAG_ENABLEBUMPMAPS = 0x0004,
-	SCENEFLAG_MAPSPLIT = 0x0008,
-	SCENEFLAG_SHOWNORMALS = 0x0010,
-	SCENEFLAG_ENABLESPECMAPS = 0x0020,
-	SCENEFLAG_ENABLEPCF = 0x0040
+	SCENEFLAG_ENABLESHADOWS = 1 << 0,
+	SCENEFLAG_PRELIT = 1 << 1,
+	SCENEFLAG_ENABLEBUMPMAPS = 1 << 2,
+	SCENEFLAG_MAPSPLIT = 1 << 3,
+	SCENEFLAG_SHOWNORMALS = 1 << 4,
+	SCENEFLAG_ENABLESPECMAPS = 1 << 5,
+	SCENEFLAG_ENABLEPCF = 1 << 6,
+	SCENEFLAG_ENABLESSAO = 1 << 7
 };
 
 Scene::Scene(Renderer& renderer) : _camera(nullptr), _renderer(&renderer)
@@ -95,6 +96,9 @@ void Scene::keyDown(SDL_Keycode key)
 	case SDLK_F3:
 		_sceneFlags ^= SCENEFLAG_ENABLEPCF;
 		break;
+	case SDLK_F4:
+		_sceneFlags ^= SCENEFLAG_ENABLESSAO;
+		break;
 	case SDLK_F5:
 		_reload();
 		break;
@@ -136,6 +140,8 @@ void Scene::update(float dtime)
 	CameraUniform camera = {
 		_camera->projectionViewMatrix(),
 		_camera->inverseProjection(),
+		_camera->projectionMatrix(),
+		_camera->viewMatrix(),
 		_camera->eye(),
 		_camera->width(),
 		_camera->height()
@@ -156,6 +162,8 @@ void Scene::_init()
 	CameraUniform camera = {
 		_camera->projectionViewMatrix(),
 		_camera->inverseProjection(),
+		_camera->projectionMatrix(),
+		_camera->viewMatrix(),
 		_camera->eye(),
 		_camera->width(),
 		_camera->height()
@@ -163,11 +171,12 @@ void Scene::_init()
 	_renderer->updateUniform("camera", (void*)&camera, sizeof(camera));
 
 	Light light;
-	light.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	light.color = glm::vec4(0.7f, 0.7f, 0.65f, 1.0f);
 	_lights.push_back(light);
 	_setLightPos(glm::vec3(-8.0f, 4.0f, 2.0f));
 
-	_sceneFlags = SCENEFLAG_ENABLEBUMPMAPS | SCENEFLAG_ENABLESHADOWS | SCENEFLAG_ENABLESPECMAPS;
+	_sceneFlags = SCENEFLAG_ENABLEBUMPMAPS | SCENEFLAG_ENABLESHADOWS | 
+		SCENEFLAG_ENABLESPECMAPS | SCENEFLAG_ENABLESSAO;
 }
 
 void Scene::_reload()

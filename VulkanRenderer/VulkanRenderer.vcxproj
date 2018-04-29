@@ -139,6 +139,7 @@
     <ClCompile Include="src\renderpass\SceneRenderPass.cpp" />
     <ClCompile Include="src\renderpass\PostProcessRenderPass.cpp" />
     <ClCompile Include="src\renderpass\ShadowMapRenderPass.cpp" />
+    <ClCompile Include="src\renderpass\SSAORenderPass.cpp" />
     <ClCompile Include="src\Scene.cpp" />
     <ClCompile Include="src\ShaderCache.cpp" />
     <ClCompile Include="src\SwapChain.cpp" />
@@ -161,6 +162,7 @@
     <ClInclude Include="src\renderpass\SceneRenderPass.h" />
     <ClInclude Include="src\renderpass\PostProcessRenderPass.h" />
     <ClInclude Include="src\renderpass\ShadowMapRenderPass.h" />
+    <ClInclude Include="src\renderpass\SSAORenderPass.h" />
     <ClInclude Include="src\Scene.h" />
     <ClInclude Include="src\SetBinding.h" />
     <ClInclude Include="src\ShaderCache.h" />

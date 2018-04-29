@@ -16,6 +16,8 @@ struct CameraUniform
 {
 	glm::mat4 projView;
 	glm::mat4 invProj;
+	glm::mat4 proj;
+	glm::mat4 view;
 	glm::vec4 pos;
 	uint32_t viewportWidth;
 	uint32_t viewportHeight;

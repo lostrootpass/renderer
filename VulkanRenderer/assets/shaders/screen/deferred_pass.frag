@@ -10,6 +10,8 @@ layout(location = 0) out vec4 fragColor;
 layout(set = 0, binding = 0) uniform usampler2D colorAttachment;
 layout(set = 0, binding = 1) uniform sampler2D normalAttachment;
 layout(set = 0, binding = 2) uniform sampler2D depthAttachment;
+layout(set = 0, binding = 3) uniform sampler2D ssaoAttachment;
+
 layout(set = 1, binding = 0) uniform sampler texsampler;
 layout(set = 2, binding = 0) uniform LightUniform {
 	LightData lightData;
@@ -102,15 +104,18 @@ void main()
 	if(diffuse.w != 1)
 		discard;
 
-    vec4 normal = texture(normalAttachment, uv);
+    vec4 normal = texture(normalAttachment, uv) * 2.0 - 1.0;
+	normal = normal * inverse(camera.view);
+
     float depth = texture(depthAttachment, uv).x;
     uint materialId = diffuse.z;
 
-    vec4 ambientMat = materialData.ambient[materialId];
-    vec4 diffuseMat = materialData.diffuse[materialId];
-    vec4 specularMat = materialData.specular[materialId];
-	vec4 emissiveMat = materialData.emissive[materialId];
-    vec4 transparencyMat = materialData.transparency[materialId];
+	const float MATERIAL_MUL = 1.0;
+    vec4 ambientMat = materialData.ambient[materialId] * MATERIAL_MUL;
+    vec4 diffuseMat = materialData.diffuse[materialId] * MATERIAL_MUL;
+    vec4 specularMat = materialData.specular[materialId] * MATERIAL_MUL;
+	vec4 emissiveMat = materialData.emissive[materialId] * MATERIAL_MUL;
+    vec4 transparencyMat = materialData.transparency[materialId];// * MATERIAL_MUL;
 
     vec2 matUV = vec2((diffuse.x) / 1000.0, (diffuse.y) / 1000.0);
     vec4 albedo = diffuseMat;
@@ -184,7 +189,13 @@ void main()
 		float dotProd = dot(normalize(lightVec), normal.xyz);
 		float clamped = clamp(dotProd, 0.0, 1.0);
 
+
 		vec3 color = ambientValue + emissiveMat.xyz + specComponent;
+		float ssaoVal = texture(ssaoAttachment, uv).r;
+		if(sceneFlag(SCENEFLAG_ENABLESSAO))
+		{
+			color *= ssaoVal;
+		}
 		vec3 lighting = diffuseValue * (lightData.color.rgb * clamped);
 		fragColor.xyz = color + lighting;
 		fragColor.w = 1.0;

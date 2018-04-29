@@ -57,6 +57,7 @@ void main() {
 
     vec3 adjustedNormal = normal;
     adjustedNormal += ((bump - 0.5) * bumpMapIntensity);
+	adjustedNormal = normalize(adjustedNormal) * 0.5 + 0.5;
 	normalColor = vec4(adjustedNormal, 1.0);
 	
 	fragColor.r = uint(fract(uv.x) * 1000.0);

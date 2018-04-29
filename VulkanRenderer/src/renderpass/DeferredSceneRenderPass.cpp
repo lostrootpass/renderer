@@ -1,5 +1,6 @@
 #include "DeferredSceneRenderPass.h"
 #include "ShadowMapRenderPass.h"
+#include "SSAORenderPass.h"
 #include "../Scene.h"
 #include "../Model.h"
 #include "../ShaderCache.h"
@@ -13,16 +14,13 @@ const uint32_t MAX_MODELS = 64;
 
 DeferredSceneRenderPass::~DeferredSceneRenderPass()
 {
+	delete _ssaoPass;
+
 	const VkDevice d = Renderer::device();
 	vkDestroySampler(d, _sampler, nullptr);
 
 	vkDestroyPipeline(d, _deferredPipeline, nullptr);
 	vkDestroyPipelineLayout(d, _deferredPipelineLayout, nullptr);
-
-	vkFreeDescriptorSets(d, _descriptorPool, 1, &_bindingSet);
-
-	vkFreeDescriptorSets(d, _descriptorPool, (uint32_t)_deferredSets.size(),
-		_deferredSets.data());
 
 	vkDestroyDescriptorSetLayout(d, _deferredSetLayout, nullptr);
 
@@ -54,6 +52,9 @@ void DeferredSceneRenderPass::init(Renderer* renderer)
 
 	_createDeferredLayout();
 	_createDeferredPipeline();
+	
+	_ssaoPass = new SSAORenderPass();
+	_ssaoPass->init(renderer);
 }
 
 void DeferredSceneRenderPass::reload()
@@ -126,6 +127,10 @@ void DeferredSceneRenderPass::render(VkCommandBuffer cmd, const Framebuffer* fra
 	vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
 		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_DEPENDENCY_BY_REGION_BIT,
 		0, nullptr, 0, nullptr, 3, memBarriers);
+
+
+	//SSAO pass
+	_ssaoPass->render(cmd);
 	
 	//Then do the shading pass
 	VkClearValue clrValues[] = {
@@ -161,7 +166,9 @@ void DeferredSceneRenderPass::render(VkCommandBuffer cmd, const Framebuffer* fra
 void DeferredSceneRenderPass::resize(uint32_t width, uint32_t height)
 {
 	_cleanupDeferredTargets();
+	_ssaoPass->resize(width, height);
 	_createRenderTargets(_renderer);
+	_ssaoPass->setAttachmentBinding(_bindingSet);
 }
 
 void DeferredSceneRenderPass::_createDescriptorSets(Renderer* renderer)
@@ -657,6 +664,8 @@ void DeferredSceneRenderPass::_cleanupDeferredTargets()
 
 	for (DeferredFramebuffer& fb : _deferredFramebuffers)
 	{
+		vkDestroyFramebuffer(d, fb.framebuffer, nullptr);
+
 		vkDestroyImageView(d, fb.view, nullptr);
 		vkDestroyImageView(d, fb.normalView, nullptr);
 		vkDestroyImageView(d, fb.depthView, nullptr);
@@ -868,7 +877,7 @@ void DeferredSceneRenderPass::_createRenderTargets(Renderer* renderer)
 			img.sampler = _sampler;
 			img.imageView = fb.view;
 
-			VkWriteDescriptorSet writes[3] = {};
+			VkWriteDescriptorSet writes[4] = {};
 			writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writes[0].descriptorCount = 1;
 			writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -897,7 +906,17 @@ void DeferredSceneRenderPass::_createRenderTargets(Renderer* renderer)
 			writes[2].dstArrayElement = 0;
 			writes[2].pImageInfo = &depth;
 
-			vkUpdateDescriptorSets(Renderer::device(), 3, writes, 0, nullptr);
+			VkDescriptorImageInfo ssao = img;
+			ssao.imageView = _ssaoPass->ssaoView();
+			writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writes[3].descriptorCount = 1;
+			writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writes[3].dstSet = _bindingSet;
+			writes[3].dstBinding = 3;
+			writes[3].dstArrayElement = 0;
+			writes[3].pImageInfo = &ssao;
+
+			vkUpdateDescriptorSets(Renderer::device(), 4, writes, 0, nullptr);
 		}
 
 		_deferredFramebuffers.push_back(fb);
@@ -910,10 +929,10 @@ void DeferredSceneRenderPass::_createDeferredLayout()
 
 	VkDescriptorSetLayoutCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	info.bindingCount = 3;
 
 	//Set 0 - render targets
-	VkDescriptorSetLayoutBinding bindings[3] = {};
+	info.bindingCount = 4;
+	VkDescriptorSetLayoutBinding bindings[4] = {};
 	bindings[0].binding = 0;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -928,6 +947,11 @@ void DeferredSceneRenderPass::_createDeferredLayout()
 	bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	bindings[2].descriptorCount = 1;
+
+	bindings[3].binding = 3;
+	bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindings[3].descriptorCount = 1;
 
 	info.pBindings = bindings;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, 

@@ -4,12 +4,13 @@
 #include "RenderPass.h"
 
 class Scene;
+class SSAORenderPass;
 
 class DeferredSceneRenderPass : public RenderPass
 {
 public:
 	DeferredSceneRenderPass(Scene& scene, RenderPass& shadowPass) 
-		: _scene(&scene), _shadowPass(&shadowPass) {}
+		: _scene(&scene), _shadowPass(&shadowPass), _ssaoPass(nullptr) {}
 
 	~DeferredSceneRenderPass();
 
@@ -61,6 +62,8 @@ private:
 	Renderer* _renderer;
 
 	Scene* _scene;
+
+	SSAORenderPass* _ssaoPass;
 
 	RenderPass* _shadowPass;
 
