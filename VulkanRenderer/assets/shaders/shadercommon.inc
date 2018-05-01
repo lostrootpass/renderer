@@ -20,6 +20,7 @@ const uint SCENEFLAG_SHOWNORMALS = 0x0010;
 const uint SCENEFLAG_ENABLESPECMAPS = 0x0020;
 const uint SCENEFLAG_ENABLEPCF = 0x0040;
 const uint SCENEFLAG_ENABLESSAO = 0x0080;
+const uint SCENEFLAG_ENABLEFXAA = 0x0100;
 
 const float bumpMapIntensity = 1.0;
 const float SHADOW_BIAS = 0.0005;

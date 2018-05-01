@@ -12,7 +12,8 @@ enum SceneFlags
 	SCENEFLAG_SHOWNORMALS = 1 << 4,
 	SCENEFLAG_ENABLESPECMAPS = 1 << 5,
 	SCENEFLAG_ENABLEPCF = 1 << 6,
-	SCENEFLAG_ENABLESSAO = 1 << 7
+	SCENEFLAG_ENABLESSAO = 1 << 7,
+	SCENEFLAG_ENABLEFXAA = 1 << 8
 };
 
 Scene::Scene(Renderer& renderer) : _camera(nullptr), _renderer(&renderer)
@@ -101,6 +102,9 @@ void Scene::keyDown(SDL_Keycode key)
 		break;
 	case SDLK_F5:
 		_reload();
+		break;
+	case SDLK_F6:
+		_sceneFlags ^= SCENEFLAG_ENABLEFXAA;
 		break;
 	case SDLK_p:
 		_sceneFlags ^= SCENEFLAG_PRELIT;

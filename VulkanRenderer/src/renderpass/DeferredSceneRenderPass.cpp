@@ -221,7 +221,8 @@ void DeferredSceneRenderPass::_createDescriptorSets(Renderer* renderer)
 	samplerInfo.minLod = 0.0f;
 	samplerInfo.maxLod = 1.0f;
 
-	samplerInfo.anisotropyEnable = VK_FALSE;
+	samplerInfo.anisotropyEnable = VK_TRUE;
+	samplerInfo.maxAnisotropy = 16.0f;
 
 	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;

@@ -87,6 +87,10 @@ void PostProcessRenderPass::render(VkCommandBuffer cmd, const Framebuffer* frame
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, 
 			getPipelineForShader("shaders/screen/" + pass));
 
+		uint32_t flags = _scene->sceneFlags();
+		vkCmdPushConstants(cmd, _pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT,
+			0, sizeof(uint32_t), &flags);
+
 		vkCmdDraw(cmd, 4, 1, 0, 0);
 
 		vkCmdEndRenderPass(cmd);
@@ -157,11 +161,12 @@ void PostProcessRenderPass::_createDescriptorSets(Renderer* renderer)
 	samplerInfo.minLod = 0.0f;
 	samplerInfo.maxLod = 1.0f;
 
-	samplerInfo.anisotropyEnable = VK_FALSE;
+	samplerInfo.anisotropyEnable = VK_TRUE;
+	samplerInfo.maxAnisotropy = 16.0f;
 
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = samplerInfo.addressModeU;
+	samplerInfo.addressModeW = samplerInfo.addressModeU;
 
 	samplerInfo.compareEnable = VK_FALSE;
 	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
@@ -336,10 +341,16 @@ void PostProcessRenderPass::_createPipelineLayout()
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, 
 		nullptr, &_descriptorLayouts[0]));
 
+	VkPushConstantRange pc = {};
+	pc.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	pc.size = sizeof(uint32_t);
+
 	VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	layoutCreateInfo.pSetLayouts = _descriptorLayouts.data();
 	layoutCreateInfo.setLayoutCount = (uint32_t)_descriptorLayouts.size();
+	layoutCreateInfo.pushConstantRangeCount = 1;
+	layoutCreateInfo.pPushConstantRanges = &pc;
 
 	VkCheck(vkCreatePipelineLayout(Renderer::device(), &layoutCreateInfo, 
 		nullptr, &_pipelineLayout));

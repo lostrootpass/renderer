@@ -36,6 +36,11 @@ public:
 
 	void resize(uint32_t width, uint32_t height);
 
+	inline uint32_t sceneFlags() const
+	{
+		return _sceneFlags;
+	}
+
 	void update(float dtime);
 
 	inline VkExtent2D viewport() const
