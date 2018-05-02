@@ -60,7 +60,7 @@ float shadowCubePCF(vec3 lightVec)
 		vec3 shadowUV = lightVec + (shadowCubeSampleDirections[i] * PCF_RADIUS);
 		float shadow = texture(samplerCube(shadowCube, texsampler), shadowUV).r;
 
-		if(length(lightVec) < shadow + SHADOW_BIAS_CUBE)
+		if(length(lightVec) < shadow + SHADOW_BIAS_CUBE*2.0)
 			lightVal += 1.0;
 	}
 	lightVal /= float(SHADOW_CUBE_SAMPLES);
@@ -104,8 +104,7 @@ void main()
 	if(diffuse.w != 1)
 		discard;
 
-    vec4 normal = texture(normalAttachment, uv) * 2.0 - 1.0;
-	normal = normal * inverse(camera.view);
+    vec4 normal = texture(normalAttachment, uv);// * 2.0 - 1.0;
 
     float depth = texture(depthAttachment, uv).x;
     uint materialId = diffuse.z;
@@ -139,6 +138,11 @@ void main()
 	vec3 worldPos = worldSpace.xyz/worldSpace.w;
 
 	float shadowValue = 1.0;
+
+	vec3 lightVec = (lightData.pos - worldPos);
+	lightVec = vec3(-lightVec.x, lightVec.y, -lightVec.z);
+	//lightVec = normalize(lightVec);
+
 	if(sceneFlag(SCENEFLAG_ENABLESHADOWS))
 	{
 		if(lightData.numViews == 1)
@@ -155,12 +159,8 @@ void main()
 		}
 		else
 		{
-			//This calculation is wrong - need to calc frag dist in lightspace
-			vec3 lightVec = (lightData.pos - worldPos);
-			lightVec.x *= -1.0;
-			lightVec.z *= -1.0;
 			if(sceneFlag(SCENEFLAG_ENABLEPCF))
-				shadowValue = shadowCubePCF(lightVec);
+				shadowValue = shadowCubePCF((lightVec));
 			else
 				shadowValue = sampleShadowCube(lightVec, vec3(0.0));
 		}
@@ -169,21 +169,26 @@ void main()
 	if(sceneFlag(SCENEFLAG_PRELIT))
 	{
 		fragColor.xyz = albedo.xyz;
+		fragColor.w = 1.0;
 	}
 	else
 	{
 		vec3 diffuseValue = albedo.xyz;
-		vec3 ambientValue = diffuseValue * 0.2;
+		vec3 ambientValue = diffuseValue * 0.3;
 
-		vec3 lightVec = normalize(lightData.pos - worldPos);
 		vec3 viewVec = normalize(camera.pos.xyz - worldPos);
-		float specAngle = max(0.0, dot(normalize(reflect(-lightVec, normal.xyz)), normalize(viewVec)));
+		vec3 lightAngleVec = (lightData.pos - worldPos);
+		float specAngle = max(0.0, dot(normalize(reflect(-lightAngleVec, normal.xyz)), normalize(viewVec)));
 		vec3 specComponent = vec3(0.0);
-		if(sceneFlag(SCENEFLAG_ENABLESPECMAPS))
+		
+		//No specularity in shaded areas
+		if(sceneFlag(SCENEFLAG_ENABLESPECMAPS) && shadowValue == 1.0)
 		{
-			specComponent = ambientValue * max(0.0, pow(specAngle * specMul, exponent));
-			//float distanceModifier = length(lightVec)/lightData.farPlane;
-			//specComponent *= distanceModifier;
+			//specComponent = ambientValue * max(0.0, pow(specAngle * specMul, exponent));
+			specComponent = vec3(1.0) * max(0.0, pow(specAngle * specMul, exponent));
+			float falloffMax = lightData.farPlane*2.0;
+			float distanceModifier = length(lightVec)/falloffMax;
+			specComponent *= smoothstep(0.0, 1.0, distanceModifier);
 		}
 
 		float dotProd = dot(normalize(lightVec), normal.xyz);
@@ -201,5 +206,9 @@ void main()
 		fragColor.w = 1.0;
 
 		fragColor.xyz *= shadowValue;
+
+		//TODO: better transparency handling
+		if(transparencyMat.r == 0.0) fragColor.a = 0.0;
 	}
+	gl_FragDepth = depth;
 }

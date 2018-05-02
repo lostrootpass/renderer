@@ -32,5 +32,8 @@ void main() {
             discard;
     }
 
+	if(materialData.transparency[materialId].x < 0.1)
+		discard;
+
 	outFragDepth = length(lightData.pos - fragPos);// / lightData.farPlane;
 }

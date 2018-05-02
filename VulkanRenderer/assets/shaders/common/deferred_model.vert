@@ -36,9 +36,7 @@ void main()
 {
     vec4 fragPos = model.pos * vec4(inPos * model.scale, 1.0);
     outUV = inUV;
-	mat3 normalMatrix = transpose(inverse(mat3(camera.view * model.pos)));
-	outNormal = normalMatrix * inNormal;
-    //outNormal = normalize(mat3(model.pos) * inNormal);
+	outNormal = mat3(model.pos) * inNormal;
     outLightVec = normalize(lightData.pos - fragPos.xyz);
     outViewVec = normalize(camera.pos.xyz - fragPos.xyz);
     outShadowCoord = biasMatrix * lightData.proj * lightData.views[0] * fragPos;

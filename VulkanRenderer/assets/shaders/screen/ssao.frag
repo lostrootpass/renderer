@@ -3,8 +3,8 @@
 
 #include "../shadercommon.inc"
 const int SSAO_KERNEL_COUNT = 32;
-const float SSAO_RADIUS = 0.05; //0.05
-const float SSAO_SAMPLE_BIAS = 0.025;
+const float SSAO_RADIUS = 0.005; //0.05
+const float SSAO_SAMPLE_BIAS = 0.00025;
 
 layout(location = 0) in vec2 uv;
 
@@ -31,7 +31,10 @@ void main()
 	vec4 unproj = camera.invProj * screenSpace;
 	vec3 viewSpace = unproj.xyz/unproj.w;
 
-	vec3 normal = texture(normalAttachment, uv).rgb * 2.0 - 1.0;
+	vec4 normalIn = texture(normalAttachment, uv);
+	normalIn = camera.proj * camera.view * normalIn;
+	normalIn = normalIn * 0.5 + 0.5;
+	vec3 normal = normalIn.rgb;
 	vec3 randomVec = texture(noiseTexture, uv * noiseScale).rgb;
 
 	vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
@@ -53,7 +56,7 @@ void main()
 		float projectedDepth = (projectedSample.z / projectedSample.w);
 
 		float rangeTolerance = smoothstep(0.0, 1.0, SSAO_RADIUS / abs(sampleDepth - projectedDepth));
-		if(sampleDepth >= projectedDepth)// + SSAO_SAMPLE_BIAS)
+		if(sampleDepth <= projectedDepth + SSAO_SAMPLE_BIAS)
 			ssaoVal += 1.0 * rangeTolerance;
 	}
 

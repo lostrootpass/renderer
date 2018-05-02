@@ -63,6 +63,8 @@ void DeferredSceneRenderPass::reload()
 	vkDestroyPipeline(Renderer::device(), _deferredPipeline, nullptr);
 	_deferredPipeline = VK_NULL_HANDLE;
 	_createDeferredPipeline();
+
+	resize(_extent.width, _extent.height);
 }
 
 void DeferredSceneRenderPass::render(VkCommandBuffer cmd, const Framebuffer* framebuffer)
@@ -165,6 +167,8 @@ void DeferredSceneRenderPass::render(VkCommandBuffer cmd, const Framebuffer* fra
 
 void DeferredSceneRenderPass::resize(uint32_t width, uint32_t height)
 {
+	_extent = _renderer->extent();
+
 	_cleanupDeferredTargets();
 	_ssaoPass->resize(width, height);
 	_createRenderTargets(_renderer);
@@ -224,9 +228,9 @@ void DeferredSceneRenderPass::_createDescriptorSets(Renderer* renderer)
 	samplerInfo.anisotropyEnable = VK_TRUE;
 	samplerInfo.maxAnisotropy = 16.0f;
 
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = samplerInfo.addressModeU;
+	samplerInfo.addressModeW = samplerInfo.addressModeU;
 
 	samplerInfo.compareEnable = VK_FALSE;
 	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
