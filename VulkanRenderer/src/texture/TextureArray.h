@@ -7,7 +7,8 @@
 class TextureArray : public Texture
 {
 public:
-	TextureArray(const std::vector<std::string>& paths, Renderer* renderer);
+	TextureArray(const std::vector<std::string>& paths, Renderer* renderer,
+		VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY);
 	~TextureArray();
 
 protected:

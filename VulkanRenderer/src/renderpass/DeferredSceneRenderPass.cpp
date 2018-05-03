@@ -6,6 +6,7 @@
 #include "../ShaderCache.h"
 #include "../Renderer.h"
 #include "../SwapChain.h"
+#include "../texture/TextureArray.h"
 
 //TODO: retrieve from global config.
 const uint32_t MAX_MATERIALS = 64;
@@ -14,6 +15,8 @@ const uint32_t MAX_MODELS = 64;
 
 DeferredSceneRenderPass::~DeferredSceneRenderPass()
 {
+	delete _skybox;
+
 	delete _ssaoPass;
 
 	const VkDevice d = Renderer::device();
@@ -55,6 +58,8 @@ void DeferredSceneRenderPass::init(Renderer* renderer)
 	
 	_ssaoPass = new SSAORenderPass();
 	_ssaoPass->init(renderer);
+
+	_createSkybox();
 }
 
 void DeferredSceneRenderPass::reload()
@@ -492,10 +497,15 @@ void DeferredSceneRenderPass::_createPipelineLayout()
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_MODEL]));
 
-	info.bindingCount = 1;
+	info.bindingCount = 2;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	bindings[0].descriptorCount = 1;
+
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindings[1].descriptorCount = 1;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, nullptr, &_descriptorLayouts[SET_BINDING_SAMPLER]));
 
 	info.bindingCount = 1;
@@ -963,18 +973,25 @@ void DeferredSceneRenderPass::_createDeferredLayout()
 		nullptr, &_deferredSetLayouts[0]));
 
 	//Set 1 - sampler
-	info.bindingCount = 1;
+	info.bindingCount = 2;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+	
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindings[1].descriptorCount = 1;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, 
 		nullptr, &_deferredSetLayouts[1]));
 
 	//Set 2 - lights
+	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
 	VkCheck(vkCreateDescriptorSetLayout(Renderer::device(), &info, 
 		nullptr, &_deferredSetLayouts[2]));
 	
 	//Set 3 - textures
+	info.bindingCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[0].descriptorCount = MAX_MATERIALS;
 	bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -982,6 +999,7 @@ void DeferredSceneRenderPass::_createDeferredLayout()
 		nullptr, &_deferredSetLayouts[3]));
 
 	//Set 4 - camera
+	info.bindingCount = 1;
 	bindings[0].descriptorCount = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
@@ -1111,4 +1129,38 @@ void DeferredSceneRenderPass::_createDeferredPipeline()
 
 	VkCheck(vkCreateGraphicsPipelines(Renderer::device(), VK_NULL_HANDLE,
 		1, &info, nullptr, &_deferredPipeline));
+}
+
+void DeferredSceneRenderPass::_createSkybox()
+{
+	//TODO: runtime-configurable skyboxes
+	const std::string base = "assets/skyboxes/hip_miramar/";
+
+	std::vector<std::string> paths = {
+		base + "miramar_ft.tga",
+		base + "miramar_bk.tga",
+		base + "miramar_rt.tga",
+		base + "miramar_lf.tga",
+		base + "miramar_dn.tga",
+		base + "miramar_up.tga",
+	};
+
+	_skybox = new TextureArray(paths, _renderer, VK_IMAGE_VIEW_TYPE_CUBE);
+	_skybox->load(_renderer);
+		
+	VkDescriptorImageInfo img = {};
+	img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	img.sampler = _sampler;
+	img.imageView = _skybox->view();
+
+	VkWriteDescriptorSet writes[1] = {};
+	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[0].descriptorCount = 1;
+	writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	writes[0].dstSet = _descriptorSets[SET_BINDING_SAMPLER];
+	writes[0].dstBinding = 1;
+	writes[0].dstArrayElement = 0;
+	writes[0].pImageInfo = &img;
+
+	vkUpdateDescriptorSets(Renderer::device(), 1, writes, 0, nullptr);
 }

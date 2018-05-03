@@ -44,8 +44,8 @@ public:
 	}
 
 protected:
-	Texture(uint8_t layers) 
-		: _path(""), _layers(layers), _viewType(VK_IMAGE_VIEW_TYPE_2D_ARRAY),
+	Texture(uint8_t layers, VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D_ARRAY) 
+		: _path(""), _layers(layers), _viewType(type),
 		_format(VK_FORMAT_R8G8B8A8_UNORM), _width(0), _height(0)
 	{};
 

@@ -5,6 +5,7 @@
 
 class Scene;
 class SSAORenderPass;
+class TextureArray;
 
 class DeferredSceneRenderPass : public RenderPass
 {
@@ -46,6 +47,8 @@ private:
 
 	void _createDeferredPipeline();
 
+	void _createSkybox();
+
 	struct DeferredFramebuffer : public Framebuffer
 	{
 		VkImage normalImage;
@@ -66,6 +69,8 @@ private:
 	SSAORenderPass* _ssaoPass;
 
 	RenderPass* _shadowPass;
+
+	TextureArray* _skybox;
 
 	VkExtent2D _extent;
 	

@@ -13,6 +13,7 @@ layout(set = 0, binding = 2) uniform sampler2D depthAttachment;
 layout(set = 0, binding = 3) uniform sampler2D ssaoAttachment;
 
 layout(set = 1, binding = 0) uniform sampler texsampler;
+layout(set = 1, binding = 1) uniform samplerCube skybox;
 layout(set = 2, binding = 0) uniform LightUniform {
 	LightData lightData;
 };
@@ -100,13 +101,24 @@ float shadowPCF(vec3 shadowPos)
 
 void main()
 {
-    uvec4 diffuse = texture(colorAttachment, uv);
+    float depth = texture(depthAttachment, uv).x;
+	vec4 screenSpace = vec4(uv * 2.0 - 1.0, depth, 1.0);
+	vec4 worldSpace = inverse(camera.projview) * screenSpace;
+	vec3 worldPos = worldSpace.xyz/worldSpace.w;
+
+	vec3 skyboxVec = (camera.pos.xyz - worldPos);
+	vec3 skyboxColor = texture(skybox, skyboxVec).rgb;
+	fragColor.rgb = skyboxColor;
+	fragColor.a = 1.0;
+    
+	uvec4 diffuse = texture(colorAttachment, uv);
 	if(diffuse.w != 1)
-		discard;
+	{
+		return;
+	}
 
     vec4 normal = texture(normalAttachment, uv);// * 2.0 - 1.0;
 
-    float depth = texture(depthAttachment, uv).x;
     uint materialId = diffuse.z;
 
 	const float MATERIAL_MUL = 1.0;
@@ -132,10 +144,6 @@ void main()
 	float specMul = 1.0;
     if(materialData.shininess[materialId] > 0.0)
 		specMul = materialData.shininess[materialId];
-
-	vec4 screenSpace = vec4(uv * 2.0 - 1.0, depth, 1.0);
-	vec4 worldSpace = inverse(camera.projview) * screenSpace;
-	vec3 worldPos = worldSpace.xyz/worldSpace.w;
 
 	float shadowValue = 1.0;
 
@@ -208,7 +216,7 @@ void main()
 		fragColor.xyz *= shadowValue;
 
 		//TODO: better transparency handling
-		if(transparencyMat.r == 0.0) fragColor.a = 0.0;
+		if(transparencyMat.r == 0.0) fragColor.rgb = skyboxColor;
 	}
 	gl_FragDepth = depth;
 }

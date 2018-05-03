@@ -22,7 +22,7 @@ static bool isDepthFormat(VkFormat format)
 
 Texture::Texture(const std::string& path, Renderer* renderer)
 	: _path(path), _format(VK_FORMAT_R8G8B8A8_UNORM), _set(VK_NULL_HANDLE),
-	_layers(1), _viewType(VK_IMAGE_VIEW_TYPE_2D), _width(0), _height(0)
+	_layers(1), _viewType(VK_IMAGE_VIEW_TYPE_2D_ARRAY), _width(0), _height(0)
 {
 	load(renderer);
 }
@@ -111,7 +111,7 @@ bool Texture::load(Renderer* renderer)
 	view.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, 
 		VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
 	view.image = _image;
-	view.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+	view.viewType = _viewType;
 	view.format = _format;
 	view.subresourceRange = range;
 

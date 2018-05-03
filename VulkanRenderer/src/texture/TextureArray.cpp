@@ -2,8 +2,9 @@
 
 #include <stb_image.h>
 
-TextureArray::TextureArray(const std::vector<std::string>& paths, Renderer* renderer)
-	: _paths(paths), Texture((uint8_t)paths.size())
+TextureArray::TextureArray(const std::vector<std::string>& paths, 
+	Renderer* renderer, VkImageViewType viewType)
+	: _paths(paths), Texture((uint8_t)paths.size(), viewType)
 {
 	assert(_layers > 0);
 }
@@ -84,6 +85,10 @@ void TextureArray::_createImage(Renderer* renderer, VkImageCreateInfo& info)
 	info = {};
 	info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+	if (_viewType == VK_IMAGE_VIEW_TYPE_CUBE)
+		info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+
 	info.imageType = VK_IMAGE_TYPE_2D;
 	info.extent = { _width, _height, 1 };
 	info.arrayLayers = _layers;
